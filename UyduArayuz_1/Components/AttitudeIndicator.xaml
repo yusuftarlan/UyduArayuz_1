@@ -1,0 +1,54 @@
+﻿<UserControl x:Class="UyduArayuz_1.Components.AttitudeIndicator"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:helix="http://helix-toolkit.org/wpf"
+             xmlns:local="clr-namespace:UyduArayuz_1.Components"
+             mc:Ignorable="d" 
+             d:DesignHeight="450" d:DesignWidth="400">
+    <Grid>
+        <helix:HelixViewport3D 
+            x:Name="viewPort" ZoomExtentsWhenLoaded="True" ShowCoordinateSystem="True"
+            Focusable="False"       
+            IsRotationEnabled="False"
+            IsPanEnabled="False"
+            IsZoomEnabled="False"
+            IsMoveEnabled="False"
+            Background="Transparent">
+            <helix:DefaultLights/>
+
+            <helix:BoxVisual3D Width="1.5" Height="1.5" Length="3" Fill="Silver">
+                <helix:BoxVisual3D.Transform>
+                    <Transform3DGroup>
+                        <RotateTransform3D>
+                            <RotateTransform3D.Rotation>
+                                <AxisAngleRotation3D Axis="1,0,0" Angle="{Binding AttitudeViewModel.Pitch}"/>
+                            </RotateTransform3D.Rotation>
+                        </RotateTransform3D>
+
+                        <RotateTransform3D>
+                            <RotateTransform3D.Rotation>
+                                <AxisAngleRotation3D Axis="0,1,0" Angle="{Binding AttitudeViewModel.Yaw}"/>
+                            </RotateTransform3D.Rotation>
+                        </RotateTransform3D>
+
+                        <RotateTransform3D>
+                            <RotateTransform3D.Rotation>
+                                <AxisAngleRotation3D Axis="0,0,1" Angle="{Binding AttitudeViewModel.Roll}"/>
+                            </RotateTransform3D.Rotation>
+                        </RotateTransform3D>
+                    </Transform3DGroup>
+                </helix:BoxVisual3D.Transform>
+            </helix:BoxVisual3D>
+
+        </helix:HelixViewport3D>
+
+        <TextBlock Text="3D DURUM SİMÜLASYONU" 
+                   VerticalAlignment="Top" 
+                   HorizontalAlignment="Center" 
+                   Margin="10" 
+                   Foreground="#38BDF8" 
+                   FontWeight="Bold"/>
+    </Grid>
+</UserControl>

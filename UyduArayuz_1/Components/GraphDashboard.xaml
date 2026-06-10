@@ -1,0 +1,67 @@
+﻿<UserControl x:Class="UyduArayuz_1.Components.GraphDashboard"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:local="clr-namespace:UyduArayuz_1.Components"
+             xmlns:oxy="http://oxyplot.org/wpf"
+         
+             mc:Ignorable="d" 
+             d:DesignHeight="450" d:DesignWidth="800">
+
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
+
+        <Style x:Key="GraphCardStyle" TargetType="HeaderedContentControl">
+            <Setter Property="Margin" Value="2"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="HeaderedContentControl">
+                        <Border BorderBrush="#CCCCCC"  Background="Transparent">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                </Grid.RowDefinitions>
+                                <TextBlock Grid.Row="0" Text="{TemplateBinding Header}" Foreground="White" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,2"/>
+                                <ContentPresenter Grid.Row="1" MinHeight="150"/>
+                            </Grid>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
+    <Grid>
+        <UniformGrid Columns="3" Rows="2">
+
+            <HeaderedContentControl Header="Paket No" Style="{StaticResource GraphCardStyle}">
+                <oxy:PlotView Model="{Binding GraphViewModel.PacketModel}" Background="Transparent"/>
+            </HeaderedContentControl>
+
+            <HeaderedContentControl Header="Basınç (Pa)" Style="{StaticResource GraphCardStyle}">
+                <oxy:PlotView Model="{Binding GraphViewModel.PressureModel}" Background="Transparent"/>
+            </HeaderedContentControl>
+
+            <HeaderedContentControl Header="Yükseklik (m)" Style="{StaticResource GraphCardStyle}">
+                <oxy:PlotView Model="{Binding GraphViewModel.HeightModel}" Background="Transparent"/>
+            </HeaderedContentControl>
+
+            <HeaderedContentControl Header="İniş Hızı (m/s)" Style="{StaticResource GraphCardStyle}">
+                <oxy:PlotView Model="{Binding GraphViewModel.VelocityModel}" Background="Transparent"/>
+            </HeaderedContentControl>
+
+            <HeaderedContentControl Header="Sıcaklık (°C)" Style="{StaticResource GraphCardStyle}">
+                <oxy:PlotView Model="{Binding GraphViewModel.TemperatureModel}" Background="Transparent"/>
+            </HeaderedContentControl>
+
+            <HeaderedContentControl Header="Pil Gerilimi (V)" Style="{StaticResource GraphCardStyle}">
+                <oxy:PlotView Model="{Binding GraphViewModel.VoltageModel}" Background="Transparent"/>
+            </HeaderedContentControl>
+
+           
+
+        </UniformGrid>
+    </Grid>
+</UserControl>
