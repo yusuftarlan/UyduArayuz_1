@@ -1,0 +1,56 @@
+﻿## Boş bırakılmış dizinleri (klasörleri) git üzerinde tutmak isterseniz
+# .gitkeep dosyalarını ignore etmeyin
+
+## Binaries
+[Bb]in/
+[Oo]bj/
+
+## Build
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]inaries/
+[Mm]etrics/
+[Tt]est[Rr]esult*/
+[Bb]uild[Ll]og.*
+
+## Visual Studio
+.vs/
+*.user
+*.userosscache
+*.sln.docstates
+*.suo
+*.userprefs
+
+## Rider
+.idea/
+*.sln.iml
+
+## NuGet
+packages/
+*.nupkg
+*.snupkg
+*.symbols.nupkg
+project.lock.json
+project.assets.json
+
+## Profiling
+*.psess
+*.vsp
+*.vspx
+*.sap
+
+## Olası log dosyaları
+*.log
+
+## Diğer geçici veya otomatik oluşturulan dosyalar
+*.cache
+*.sqlite
+*.mdf
+*.ldf
+*.sdf
+*.bak
