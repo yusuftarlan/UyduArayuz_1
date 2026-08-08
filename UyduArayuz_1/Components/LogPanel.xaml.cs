@@ -21,7 +21,10 @@ namespace UyduArayuz_1.Components
                 if (e.Action == NotifyCollectionChangedAction.Add)
                 {
                     // Eklenen son elemanı bul ve kamerayı (Scroll) ona kaydır
-                    TerminalListBox.ScrollIntoView(e.NewItems[0]);
+                    if (e.Action == NotifyCollectionChangedAction.Add && e.NewItems is { Count: > 0 })
+                    {
+                        TerminalListBox.ScrollIntoView(e.NewItems[0]);
+                    }
                 }
             };
         }

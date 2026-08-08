@@ -90,9 +90,6 @@ namespace UyduArayuz_1.ViewModels
 
         }
 
-        // ====================================================================
-        // 5. OLAY YAKALAYICI (Gümüş Tepsi)
-        // ====================================================================
 
         private void StartTelemetry(string port, int baudRate)
         {
@@ -127,19 +124,13 @@ namespace UyduArayuz_1.ViewModels
         private void TelemetryService_OnTelemetryReceived(object sender, TelemetryPacket e)
         {
            
-
-            // Çırak "Yeni paket geldi" dediğinde, UI thread'ini kitlemeden tepsiyi al
             Application.Current.Dispatcher.InvokeAsync(() =>
             {
-                AlarmPanelViewModel.UpdateAlarms(e.ErrorCode);
-                
-                GraphViewModel.UpdateGraphs(e);
-
-                AttitudeViewModel.UpdateAttitude(e.Yaw, e.Pitch, e.Roll);
-                // Çırağın getirdiği yeni kutuyu (e), bizim vitrindeki kutuyla (GuncelPaket) yer değiştir!
-                // Bu atama yapıldığı an, yukarıdaki 'set' bloğu çalışır ve zil çalar.
-                CurrentPacket = e;
-                TelemetryHistory.Add(e);
+                AlarmPanelViewModel.UpdateAlarms(e.ErrorCode); // Alarm paneli güncellensin
+                GraphViewModel.UpdateGraphs(e); // Grafikler güncellensin
+                AttitudeViewModel.UpdateAttitude(e.Yaw, e.Pitch, e.Roll); // 3d gösterim güncellensin
+                CurrentPacket = e; // Instant panel güncellensin
+                TelemetryHistory.Add(e); // Geçmişe ekle
 
                 // Opsiyonel: Tablo çok şişmesin diye sadece son 100 veriyi tutabiliriz
                 if (TelemetryHistory.Count > 100)

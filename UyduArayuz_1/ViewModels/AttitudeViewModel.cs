@@ -1,47 +1,66 @@
-﻿using System;
-using System.Collections.ObjectModel;
 using System.ComponentModel;
-using System.Diagnostics;
 using System.Runtime.CompilerServices;
-using System.Windows;
-using UyduArayuz_1.Models;
+
 namespace UyduArayuz_1.ViewModels
 {
-    public class AttitudeViewModel
+    public class AttitudeViewModel : INotifyPropertyChanged
     {
         private double _pitch;
+        private double _roll;
+        private double _yaw;
+
+        public event PropertyChangedEventHandler? PropertyChanged;
+
         public double Pitch
         {
             get => _pitch;
-            set { _pitch = value;  }
+            set
+            {
+                if (_pitch == value) return;
+                _pitch = value;
+                OnPropertyChanged();
+            }
         }
 
-        private double _roll;
         public double Roll
         {
             get => _roll;
-            set { _roll = value; }
+            set
+            {
+                if (_roll == value) return;
+                _roll = value;
+                OnPropertyChanged();
+            }
         }
 
-        private double _yaw;
         public double Yaw
         {
             get => _yaw;
-            set { _yaw = value; }
+            set
+            {
+                if (_yaw == value) return;
+                _yaw = value;
+                OnPropertyChanged();
+            }
         }
-
 
         public void UpdateAttitude(double yaw, double pitch, double roll)
         {
             Yaw = yaw;
             Pitch = pitch;
             Roll = roll;
-            
         }
 
-        // İleride eklenebilecek özellikler
-        public void ResetOrientation() { Pitch = Roll = Yaw = 0; }
+        public void ResetOrientation()
+        {
+            Pitch = 0;
+            Roll = 0;
+            Yaw = 0;
+        }
 
-
+        private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        }
     }
 }
