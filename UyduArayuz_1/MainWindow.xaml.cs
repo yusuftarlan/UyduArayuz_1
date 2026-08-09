@@ -19,10 +19,16 @@ namespace UyduArayuz_1
     {
         public MainWindow()
         {
-            MainViewModel mainViewModel = new MainViewModel();
             InitializeComponent();
+            MainViewModel mainViewModel = new MainViewModel();
 
             this.DataContext = mainViewModel; //Tüm arayüzün veri kaynağı olaran MainViewModel'ı atıyoruz
+        }
+
+        protected override void OnClosed(EventArgs e)
+        {
+            (DataContext as IDisposable)?.Dispose();
+            base.OnClosed(e);
         }
     }
 }

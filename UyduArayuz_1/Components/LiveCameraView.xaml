@@ -1,4 +1,4 @@
-﻿<UserControl x:Class="UyduArayuz_1.Components.LiveCameraView"
+<UserControl x:Class="UyduArayuz_1.Components.LiveCameraView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -14,110 +14,31 @@
 
         <Grid Margin="4">
             <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="Auto"/>
                 <RowDefinition Height="*"/>
                 <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
 
-            <TextBlock Grid.Row="0"
-                       Text="Video Görüntüsü"
-                       Foreground="White"
-                       FontWeight="Bold"
-                       HorizontalAlignment="Center"
-                       Margin="0,2,0,5"/>
-
-            <!-- Yerel dosya kontrolleri -->
-            <Grid Grid.Row="1" Margin="0,2">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="75"/>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-
-                <TextBlock Grid.Column="0"
-                           Text="Dosya:"
-                           Foreground="White"
-                           VerticalAlignment="Center"/>
-
-                <TextBox x:Name="LocalFilePathTextBox"
-                         Grid.Column="1"
-                         Margin="2"/>
-
-                <Button Grid.Column="2"
-                        Content="Seç"
-                        Margin="2"
-                        Padding="8,2"
-                        Click="SelectLocalFile_Click"/>
-
-                <Button Grid.Column="3"
-                        Content="Başlat"
-                        Margin="2"
-                        Padding="8,2"
-                        Click="PlayLocalFile_Click"/>
-            </Grid>
-
-            <!-- Ağ adresi kontrolleri -->
-            <Grid Grid.Row="2" Margin="0,2">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="75"/>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-
-                <TextBlock Grid.Column="0"
-                           Text="Ağ adresi:"
-                           Foreground="White"
-                           VerticalAlignment="Center"/>
-
-                <TextBox x:Name="NetworkAddressTextBox"
-                         Grid.Column="1"
-                         Margin="2"/>
-
-                <Button Grid.Column="2"
-                        Content="Başlat"
-                        Margin="2"
-                        Padding="8,2"
-                        Click="PlayNetworkStream_Click"/>
-
-                <Button Grid.Column="3"
-                        Content="Durdur"
-                        Margin="2"
-                        Padding="8,2"
-                        Click="StopPlayback_Click"/>
-            </Grid>
-
-            <Border Grid.Row="3"
-            Background="Black"
-            Margin="2">
-
-                <MediaElement x:Name="CameraStreamPlayer"
-                      Stretch="Uniform"
-                      LoadedBehavior="Manual"
-                      UnloadedBehavior="Stop"/> 
+            <Border Grid.Row="0"
+                    Background="Black"
+                    Margin="2">
+                <Image x:Name="StreamImage"
+                       Stretch="Uniform"
+                       SnapsToDevicePixels="True"/>
             </Border>
 
-            <!-- Binding ile ViewModel durumu -->
-            <StackPanel Grid.Row="4" Margin="2">
-                <TextBlock Foreground="White">
-                    <Run Text="Durum: "/>
-                    <Run Text="{Binding State, Mode=OneWay}"/>
-                </TextBlock>
+            <StackPanel Grid.Row="1"
+                        Orientation="Horizontal"
+                        HorizontalAlignment="Center"
+                        Margin="2">
+                <Button Content="Başlat"
+                        Margin="2"
+                        Padding="12,3"
+                        Click="StartStream_Click"/>
 
-                <TextBlock Foreground="White">
-                    <Run Text="Kaynak: "/>
-                    <Run Text="{Binding CurrentSource.DisplayName,
-                                       Mode=OneWay,
-                                       TargetNullValue=-}"/>
-                </TextBlock>
-
-                <TextBlock Text="{Binding ErrorMessage, Mode=OneWay}"
-                           Foreground="#FFFFD0D0"
-                           FontWeight="SemiBold"
-                           TextWrapping="Wrap"/>
+                <Button Content="Durdur"
+                        Margin="2"
+                        Padding="12,3"
+                        Click="StopStream_Click"/>
             </StackPanel>
         </Grid>
     </Border>

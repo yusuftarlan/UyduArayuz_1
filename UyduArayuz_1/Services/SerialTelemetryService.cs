@@ -1,27 +1,30 @@
 using System;
 using System.Diagnostics;
-using System.IO;
 using System.IO.Ports;
 using System.Threading.Channels;
 using UyduArayuz_1.Models;
 
 namespace UyduArayuz_1.Services
 {
-    public class SerialTelemetryService
+    public class SerialTelemetryService : IDisposable
     {
         private SerialPort _serialPort;
         private CancellationTokenSource? _cancellationTokenSource;
 
         private Channel<TelemetryPacket>? _uiChannel;
-        private Channel<TelemetryPacket>? _logChannel;
+        private Task? _producerTask;
+        private Task? _uiConsumerTask;
+        private readonly TelemetryCsvRecorder? _csvRecorder;
+        private int _recordingFailureReported;
 
         private readonly TelemetryFrameExtractor _frameExtractor;
         private readonly TelemetryPacketParser _packetParser;
 
         public event EventHandler<TelemetryPacket>? OnTelemetryReceived;
 
-        public SerialTelemetryService()
+        public SerialTelemetryService(TelemetryCsvRecorder? csvRecorder)
         {
+            _csvRecorder = csvRecorder;
             _serialPort = new SerialPort();
             _frameExtractor = new TelemetryFrameExtractor();
             _packetParser = new TelemetryPacketParser();
@@ -29,7 +32,7 @@ namespace UyduArayuz_1.Services
 
         public void Start(string portName, int baudRate)
         {
-            if (_serialPort != null && _serialPort.IsOpen)
+            if (_cancellationTokenSource != null)
             {
                 Stop();
             }
@@ -44,15 +47,17 @@ namespace UyduArayuz_1.Services
             };
 
             _uiChannel = Channel.CreateUnbounded<TelemetryPacket>();
-            _logChannel = Channel.CreateUnbounded<TelemetryPacket>();
             _cancellationTokenSource = new CancellationTokenSource();
             _frameExtractor.Clear();
 
             try
             {
-                Task.Factory.StartNew(ProducerLoop, _cancellationTokenSource.Token, TaskCreationOptions.LongRunning, TaskScheduler.Default);
-                Task.Run(LoggerConsumerLoop, _cancellationTokenSource.Token);
-                Task.Run(UiConsumerLoop, _cancellationTokenSource.Token);
+                _producerTask = Task.Factory.StartNew(
+                    ProducerLoop,
+                    _cancellationTokenSource.Token,
+                    TaskCreationOptions.LongRunning,
+                    TaskScheduler.Default);
+                _uiConsumerTask = Task.Run(UiConsumerLoop);
             }
             catch (Exception ex)
             {
@@ -100,7 +105,14 @@ namespace UyduArayuz_1.Services
                             Debug.WriteLine("New binary telemetry packet received; writing to channels.");
                             LoggerService.Instance.AddLog($"Zaman: {packet.SentDate}");
                             _uiChannel?.Writer.TryWrite(packet);
-                            _logChannel?.Writer.TryWrite(packet);
+                            if (_csvRecorder != null
+                                && !_csvRecorder.TryRecord(packet)
+                                && Interlocked.Exchange(ref _recordingFailureReported, 1) == 0)
+                            {
+                                LoggerService.Instance.AddLog(
+                                    "Telemetry CSV queue is unavailable or full; a record could not be saved.",
+                                    "ERROR");
+                            }
                         }
                         else
                         {
@@ -127,35 +139,12 @@ namespace UyduArayuz_1.Services
             }
         }
 
-        private async Task LoggerConsumerLoop()
-        {
-            var logChannel = _logChannel;
-            var cancellationTokenSource = _cancellationTokenSource;
-            if (logChannel == null || cancellationTokenSource == null) return;
-
-            using StreamWriter sw = new StreamWriter("telemetri_log.csv", true);
-
-            await foreach (var packet in logChannel.Reader.ReadAllAsync(cancellationTokenSource.Token))
-            {
-                try
-                {
-                    await sw.WriteLineAsync($"{packet.PacketNo},{packet.Height},{packet.ErrorCode}");
-                    await sw.FlushAsync();
-                }
-                catch (Exception ex)
-                {
-                    Debug.WriteLine($"Logging error: {ex.Message}");
-                }
-            }
-        }
-
         private async Task UiConsumerLoop()
         {
             var uiChannel = _uiChannel;
-            var cancellationTokenSource = _cancellationTokenSource;
-            if (uiChannel == null || cancellationTokenSource == null) return;
+            if (uiChannel == null) return;
 
-            await foreach (var packet in uiChannel.Reader.ReadAllAsync(cancellationTokenSource.Token))
+            await foreach (var packet in uiChannel.Reader.ReadAllAsync())
             {
                 Debug.WriteLine("UI consumer received a telemetry packet; raising update event.");
                 OnTelemetryReceived?.Invoke(this, packet);
@@ -164,20 +153,62 @@ namespace UyduArayuz_1.Services
 
         public void Stop()
         {
-            _cancellationTokenSource?.Cancel();
+            if (_cancellationTokenSource == null)
+            {
+                return;
+            }
 
-            _uiChannel?.Writer.TryComplete();
-            _logChannel?.Writer.TryComplete();
+            _cancellationTokenSource.Cancel();
 
             if (_serialPort != null && _serialPort.IsOpen)
             {
                 _serialPort.Close();
             }
 
-            LoggerService.Instance.AddLog("Serial port closed.", "WARN");
+            try
+            {
+                (_producerTask ?? Task.CompletedTask).GetAwaiter().GetResult();
+            }
+            catch (OperationCanceledException)
+            {
+                // Normal shutdown path.
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Producer shutdown error: {ex.Message}");
+                LoggerService.Instance.AddLog($"Producer shutdown error: {ex.Message}", "ERROR");
+            }
+
+            _uiChannel?.Writer.TryComplete();
+
+            try
+            {
+                (_uiConsumerTask ?? Task.CompletedTask).GetAwaiter().GetResult();
+            }
+            catch (OperationCanceledException)
+            {
+                // Normal shutdown path.
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"UI consumer shutdown error: {ex.Message}");
+                LoggerService.Instance.AddLog($"UI consumer shutdown error: {ex.Message}", "ERROR");
+            }
 
             _serialPort?.Dispose();
+
+            LoggerService.Instance.AddLog("Serial port closed.", "WARN");
+
             _cancellationTokenSource?.Dispose();
+            _cancellationTokenSource = null;
+            _producerTask = null;
+            _uiConsumerTask = null;
+        }
+
+        public void Dispose()
+        {
+            Stop();
+            GC.SuppressFinalize(this);
         }
     }
 }

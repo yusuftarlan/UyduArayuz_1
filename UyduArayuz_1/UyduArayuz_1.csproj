@@ -16,4 +16,11 @@
     <PackageReference Include="System.IO.Ports" Version="10.0.6" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Update="body-model\counsat.stl">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>

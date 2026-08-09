@@ -1,6 +1,7 @@
 ﻿using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.IO;
 using System.Runtime.CompilerServices;
 using System.Windows;
 using UyduArayuz_1.Models;
@@ -8,7 +9,7 @@ using UyduArayuz_1.Services;
 
 namespace UyduArayuz_1.ViewModels
 {
-    public class MainViewModel : INotifyPropertyChanged
+    public class MainViewModel : INotifyPropertyChanged, IDisposable
     {
         // ====================================================================
         // 1. ZİL ALTYAPISI (INotifyPropertyChanged)
@@ -25,6 +26,7 @@ namespace UyduArayuz_1.ViewModels
         // 2. SERVİS (Telsiz)
         // ====================================================================
         private readonly SerialTelemetryService _telemetryService;
+        private readonly TelemetryCsvRecorder? _csvRecorder;
 
         private LoggerService _loggerService;
 
@@ -60,9 +62,22 @@ namespace UyduArayuz_1.ViewModels
             // Kutunun başlangıçta boş görünmemesi için sahte(dummy) bir boş kutu koyabiliriz
             CurrentPacket = new TelemetryPacket();
 
-            // Servisi ayağa kaldır
-            _telemetryService = new SerialTelemetryService();
             _loggerService = new LoggerService();
+
+            string recordsDirectory = ResolveTelemetryRecordsDirectory();
+            try
+            {
+                _csvRecorder = new TelemetryCsvRecorder(recordsDirectory);
+                _loggerService.AddLog($"Telemetry CSV file created: {_csvRecorder.FilePath}", "INFO");
+            }
+            catch (Exception ex)
+            {
+                _csvRecorder = null;
+                Debug.WriteLine($"Telemetry CSV initialization error: {ex.Message}");
+                _loggerService.AddLog($"Telemetry CSV initialization error: {ex.Message}", "ERROR");
+            }
+
+            _telemetryService = new SerialTelemetryService(_csvRecorder);
 
             TelemetryHistory = new ObservableCollection<TelemetryPacket>();
 
@@ -138,6 +153,52 @@ namespace UyduArayuz_1.ViewModels
                     TelemetryHistory.RemoveAt(0); // En eskiyi sil
                 }
             });
+        }
+
+        private static string ResolveTelemetryRecordsDirectory()
+        {
+            string workingDirectory = Environment.CurrentDirectory;
+            string workingDirectoryRecords = Path.Combine(workingDirectory, "telemetry-records");
+            string projectDirectory = Path.Combine(workingDirectory, "UyduArayuz_1");
+
+            if (Directory.Exists(workingDirectoryRecords))
+            {
+                return workingDirectoryRecords;
+            }
+
+            if (Directory.Exists(Path.Combine(projectDirectory, "telemetry-records")))
+            {
+                return Path.Combine(projectDirectory, "telemetry-records");
+            }
+
+            return Path.Combine(AppContext.BaseDirectory, "telemetry-records");
+        }
+
+        public void Dispose()
+        {
+            _telemetryService.OnTelemetryReceived -= TelemetryService_OnTelemetryReceived;
+
+            try
+            {
+                _telemetryService.Dispose();
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Telemetry service shutdown error: {ex.Message}");
+                _loggerService.AddLog($"Telemetry service shutdown error: {ex.Message}", "ERROR");
+            }
+
+            try
+            {
+                _csvRecorder?.Dispose();
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Telemetry CSV shutdown error: {ex.Message}");
+                _loggerService.AddLog($"Telemetry CSV shutdown error: {ex.Message}", "ERROR");
+            }
+
+            GC.SuppressFinalize(this);
         }
     }
 }

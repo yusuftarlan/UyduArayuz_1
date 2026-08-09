@@ -46,6 +46,7 @@ project.assets.json
 
 ## Olası log dosyaları
 *.log
+UyduArayuz_1/telemetry-records/*.csv
 
 ## Diğer geçici veya otomatik oluşturulan dosyalar
 *.cache

@@ -9,18 +9,30 @@
              d:DesignHeight="450" d:DesignWidth="400">
     <Grid>
         <helix:HelixViewport3D 
-            x:Name="viewPort" ZoomExtentsWhenLoaded="True" ShowCoordinateSystem="True"
+            x:Name="viewPort" ZoomExtentsWhenLoaded="False" ShowCoordinateSystem="True"
             Focusable="False"       
             IsRotationEnabled="False"
             IsPanEnabled="False"
-            IsZoomEnabled="False"
+            IsZoomEnabled="True"
             IsMoveEnabled="False"
             Background="Transparent">
             <helix:DefaultLights/>
 
-            <helix:BoxVisual3D Width="1.5" Height="1.5" Length="3" Fill="Silver">
-                <helix:BoxVisual3D.Transform>
+            <helix:FileModelVisual3D x:Name="SatelliteModel"
+                                     DefaultMaterial="{x:Static helix:Materials.Gray}">
+                <helix:FileModelVisual3D.Transform>
                     <Transform3DGroup>
+                        <!-- STL koordinatlarını önce orijine merkezle, sonra viewport boyutuna ölçekle. -->
+                        <TranslateTransform3D x:Name="ModelCenterOffset"/>
+                        <ScaleTransform3D x:Name="ModelScale"/>
+
+                        <!-- STL'nin ters olan başlangıç yönünü düzeltir. -->
+                        <RotateTransform3D>
+                            <RotateTransform3D.Rotation>
+                                <AxisAngleRotation3D Axis="1,0,0" Angle="180"/>
+                            </RotateTransform3D.Rotation>
+                        </RotateTransform3D>
+
                         <RotateTransform3D>
                             <RotateTransform3D.Rotation>
                                 <AxisAngleRotation3D Axis="1,0,0" Angle="{Binding AttitudeViewModel.Pitch}"/>
@@ -39,8 +51,8 @@
                             </RotateTransform3D.Rotation>
                         </RotateTransform3D>
                     </Transform3DGroup>
-                </helix:BoxVisual3D.Transform>
-            </helix:BoxVisual3D>
+                </helix:FileModelVisual3D.Transform>
+            </helix:FileModelVisual3D>
 
         </helix:HelixViewport3D>
 
@@ -48,7 +60,16 @@
                    VerticalAlignment="Top" 
                    HorizontalAlignment="Center" 
                    Margin="10" 
-                   Foreground="#38BDF8" 
+                   Foreground="#38BDF8"
                    FontWeight="Bold"/>
+
+        <TextBlock x:Name="ModelLoadError"
+                   VerticalAlignment="Bottom"
+                   HorizontalAlignment="Center"
+                   Margin="10"
+                   Foreground="#F87171"
+                   TextAlignment="Center"
+                   TextWrapping="Wrap"
+                   Visibility="Collapsed"/>
     </Grid>
 </UserControl>
