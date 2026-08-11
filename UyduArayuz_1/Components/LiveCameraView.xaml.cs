@@ -6,12 +6,12 @@ using UyduArayuz_1.Services.Video;
 namespace UyduArayuz_1.Components;
 
 /// <summary>
-/// WebRTC canlı yayın görünümünün WPF composition root'udur.
+/// USB kamera ve WebRTC oynatıcılarının WPF composition root'udur.
 /// </summary>
 public partial class LiveCameraView : UserControl
 {
-    private const LiveStreamProtocol ConfiguredProtocol =
-        LiveStreamProtocol.WebRtc;
+    private static readonly LiveStreamProtocol ConfiguredProtocol =
+        LiveStreamProtocol.UsbCamera;
 
     private const string DefaultStreamUrl =
         "https://camera.mahuk.online/camera/";
@@ -28,6 +28,19 @@ public partial class LiveCameraView : UserControl
             typeof(string),
             typeof(LiveCameraView),
             new PropertyMetadata(DefaultStreamUrl));
+
+    public int CameraIndex
+    {
+        get => (int)GetValue(CameraIndexProperty);
+        set => SetValue(CameraIndexProperty, value);
+    }
+
+    public static readonly DependencyProperty CameraIndexProperty =
+        DependencyProperty.Register(
+            nameof(CameraIndex),
+            typeof(int),
+            typeof(LiveCameraView),
+            new PropertyMetadata(0));
 
     private readonly SemaphoreSlim _lifecycleLock = new(1, 1);
     private readonly ILiveStreamLogger _logger =
@@ -51,15 +64,16 @@ public partial class LiveCameraView : UserControl
 
     private async void StartStream_Click(object sender, RoutedEventArgs e)
     {
-        string address = StreamUrl?.Trim() ?? string.Empty;
         CancellationTokenSource? startCancellation = null;
 
-        if (!Uri.TryCreate(address, UriKind.Absolute, out Uri? streamUri))
+        LiveStreamSource source;
+        try
         {
-            _logger.LogError(
-                "adres doğrulama",
-                new ArgumentException(
-                    "Canlı yayın adresi geçerli bir mutlak URL değil."));
+            source = CreateConfiguredSource();
+        }
+        catch (Exception exception)
+        {
+            _logger.LogError("kaynak doğrulama", exception);
             return;
         }
 
@@ -77,13 +91,15 @@ public partial class LiveCameraView : UserControl
             ILiveStreamPlayerResolver resolver = CreatePlayerResolver();
             ILiveStreamPlayer player = resolver.Resolve(ConfiguredProtocol);
 
+            ShowSurface(ConfiguredProtocol);
+
             player.StateChanged += Player_StateChanged;
             player.ErrorOccurred += Player_ErrorOccurred;
             _player = player;
 
             startCancellation = new CancellationTokenSource();
             _startCancellation = startCancellation;
-            await player.StartAsync(streamUri, startCancellation.Token);
+            await player.StartAsync(source, startCancellation.Token);
         }
         catch (OperationCanceledException)
             when (startCancellation?.IsCancellationRequested == true)
@@ -159,10 +175,48 @@ public partial class LiveCameraView : UserControl
         ILiveStreamPlayerFactory[] factories =
         [
             new WebRtcLiveStreamPlayerFactory(
-                () => new WebView2WebRtcPlaybackAdapter(StreamBrowser))
+                () => new WebView2WebRtcPlaybackAdapter(StreamBrowser)),
+            new UsbCameraLiveStreamPlayerFactory(
+                () => new OpenCvUsbCameraPlaybackAdapter(UsbCameraImage))
         ];
 
         return new LiveStreamPlayerResolver(factories);
+    }
+
+    private LiveStreamSource CreateConfiguredSource()
+    {
+        if (ConfiguredProtocol == LiveStreamProtocol.UsbCamera)
+        {
+            if (CameraIndex < 0)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(CameraIndex),
+                    "Kamera numarası negatif olamaz.");
+            }
+
+            return new UsbCameraLiveStreamSource(CameraIndex);
+        }
+
+        string address = StreamUrl?.Trim() ?? string.Empty;
+        if (!Uri.TryCreate(address, UriKind.Absolute, out Uri? streamUri))
+        {
+            throw new ArgumentException(
+                "Canlı yayın adresi geçerli bir mutlak URL değil.",
+                nameof(StreamUrl));
+        }
+
+        return new WebRtcLiveStreamSource(streamUri);
+    }
+
+    private void ShowSurface(LiveStreamProtocol protocol)
+    {
+        bool useUsbCamera = protocol == LiveStreamProtocol.UsbCamera;
+        UsbCameraImage.Visibility = useUsbCamera
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        StreamBrowser.Visibility = useUsbCamera
+            ? Visibility.Collapsed
+            : Visibility.Visible;
     }
 
     private void Player_StateChanged(

@@ -22,8 +22,15 @@
             <Border Grid.Row="0"
                     Background="Black"
                     Margin="2">
-                <wv2:WebView2 x:Name="StreamBrowser"
-                              DefaultBackgroundColor="Black"/>
+                <Grid>
+                    <Image x:Name="UsbCameraImage"
+                           Stretch="Uniform"
+                           SnapsToDevicePixels="True"/>
+
+                    <wv2:WebView2 x:Name="StreamBrowser"
+                                  Visibility="Collapsed"
+                                  DefaultBackgroundColor="Black"/>
+                </Grid>
             </Border>
 
             <StackPanel Grid.Row="1"
@@ -35,6 +42,17 @@
                         Margin="2"
                         Padding="12,3"
                         Click="StartStream_Click"/>
+
+                <TextBlock Text="Kamera No:"
+                           VerticalAlignment="Center"
+                           Margin="8,2,2,2"/>
+
+                <TextBox Width="36"
+                         Margin="2"
+                         VerticalContentAlignment="Center"
+                         Text="{Binding CameraIndex,
+                                        RelativeSource={RelativeSource AncestorType=UserControl},
+                                        UpdateSourceTrigger=PropertyChanged}"/>
 
                 <Button x:Name="StopButton"
                         Content="Durdur"

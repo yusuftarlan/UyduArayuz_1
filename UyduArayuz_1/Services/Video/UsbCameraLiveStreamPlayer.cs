@@ -1,15 +1,15 @@
 namespace UyduArayuz_1.Services.Video;
 
 /// <summary>
-/// WebRTC adapter'ını protokolden bağımsız player sözleşmesine uyarlar.
+/// USB kamera adapter'ını ortak canlı yayın yaşam döngüsüne uyarlar.
 /// </summary>
-public sealed class WebRtcLiveStreamPlayer : ILiveStreamPlayer
+public sealed class UsbCameraLiveStreamPlayer : ILiveStreamPlayer
 {
-    private readonly IWebRtcPlaybackAdapter _adapter;
+    private readonly IUsbCameraPlaybackAdapter _adapter;
     private readonly SemaphoreSlim _lifecycleLock = new(1, 1);
     private bool _disposed;
 
-    public LiveStreamProtocol Protocol => LiveStreamProtocol.WebRtc;
+    public LiveStreamProtocol Protocol => LiveStreamProtocol.UsbCamera;
 
     public LiveStreamState State { get; private set; } = LiveStreamState.Idle;
 
@@ -17,7 +17,7 @@ public sealed class WebRtcLiveStreamPlayer : ILiveStreamPlayer
 
     public event EventHandler<LiveStreamErrorEventArgs>? ErrorOccurred;
 
-    public WebRtcLiveStreamPlayer(IWebRtcPlaybackAdapter adapter)
+    public UsbCameraLiveStreamPlayer(IUsbCameraPlaybackAdapter adapter)
     {
         ArgumentNullException.ThrowIfNull(adapter);
         _adapter = adapter;
@@ -31,11 +31,18 @@ public sealed class WebRtcLiveStreamPlayer : ILiveStreamPlayer
         ArgumentNullException.ThrowIfNull(source);
         ObjectDisposedException.ThrowIf(_disposed, this);
 
-        if (source is not WebRtcLiveStreamSource webRtcSource)
+        if (source is not UsbCameraLiveStreamSource usbSource)
         {
             throw new ArgumentException(
-                "WebRTC player yalnızca WebRtcLiveStreamSource kabul eder.",
+                "USB kamera player yalnızca UsbCameraLiveStreamSource kabul eder.",
                 nameof(source));
+        }
+
+        if (usbSource.DeviceIndex < 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(source),
+                "Kamera numarası negatif olamaz.");
         }
 
         await _lifecycleLock.WaitAsync(cancellationToken);
@@ -46,7 +53,7 @@ public sealed class WebRtcLiveStreamPlayer : ILiveStreamPlayer
 
             if (State is LiveStreamState.Starting or LiveStreamState.Playing)
             {
-                throw new InvalidOperationException("WebRTC yayını zaten çalışıyor.");
+                throw new InvalidOperationException("USB kamera zaten çalışıyor.");
             }
 
             SetState(LiveStreamState.Starting);
@@ -54,7 +61,7 @@ public sealed class WebRtcLiveStreamPlayer : ILiveStreamPlayer
             try
             {
                 await _adapter.StartAsync(
-                    webRtcSource.PlayerPageUri,
+                    usbSource.DeviceIndex,
                     cancellationToken);
                 SetState(LiveStreamState.Playing);
             }
@@ -150,7 +157,7 @@ public sealed class WebRtcLiveStreamPlayer : ILiveStreamPlayer
 
     private void Adapter_PlaybackFailed(
         object? sender,
-        WebRtcPlaybackFailedEventArgs e)
+        UsbCameraPlaybackFailedEventArgs e)
     {
         if (_disposed || State is LiveStreamState.Stopping or LiveStreamState.Idle)
         {
@@ -175,22 +182,19 @@ public sealed class WebRtcLiveStreamPlayer : ILiveStreamPlayer
     }
 }
 
-/// <summary>
-/// WebRTC player oluşturma ayrıntısını composition root'tan ayırır.
-/// </summary>
-public sealed class WebRtcLiveStreamPlayerFactory : ILiveStreamPlayerFactory
+public sealed class UsbCameraLiveStreamPlayerFactory : ILiveStreamPlayerFactory
 {
-    private readonly Func<IWebRtcPlaybackAdapter> _adapterFactory;
+    private readonly Func<IUsbCameraPlaybackAdapter> _adapterFactory;
 
-    public LiveStreamProtocol Protocol => LiveStreamProtocol.WebRtc;
+    public LiveStreamProtocol Protocol => LiveStreamProtocol.UsbCamera;
 
-    public WebRtcLiveStreamPlayerFactory(
-        Func<IWebRtcPlaybackAdapter> adapterFactory)
+    public UsbCameraLiveStreamPlayerFactory(
+        Func<IUsbCameraPlaybackAdapter> adapterFactory)
     {
         ArgumentNullException.ThrowIfNull(adapterFactory);
         _adapterFactory = adapterFactory;
     }
 
     public ILiveStreamPlayer Create() =>
-        new WebRtcLiveStreamPlayer(_adapterFactory());
+        new UsbCameraLiveStreamPlayer(_adapterFactory());
 }

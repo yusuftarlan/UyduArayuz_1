@@ -18,6 +18,7 @@
     <PackageReference Include="Mapsui.Wpf" Version="4.1.8" />
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4078.44" />
     <PackageReference Include="OxyPlot.Wpf" Version="2.2.0" />
+    <PackageReference Include="OpenCvSharp4.Windows" Version="4.13.0.20260627" />
     <PackageReference Include="System.Data.SqlClient" Version="4.9.1" />
     <PackageReference Include="System.IO.Ports" Version="10.0.6" />
   </ItemGroup>

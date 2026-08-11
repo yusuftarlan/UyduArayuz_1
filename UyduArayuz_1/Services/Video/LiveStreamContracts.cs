@@ -5,8 +5,21 @@ namespace UyduArayuz_1.Services.Video;
 /// </summary>
 public enum LiveStreamProtocol
 {
-    WebRtc
+    WebRtc,
+    UsbCamera
 }
+
+/// <summary>
+/// Player'a verilecek kaynağı protokole özel ayrıntılarla birlikte taşır.
+/// USB kamera bir URI olmadığı için kaynak bilgisi doğrudan StartAsync parametresidir.
+/// </summary>
+public abstract record LiveStreamSource(LiveStreamProtocol Protocol);
+
+public sealed record WebRtcLiveStreamSource(Uri PlayerPageUri)
+    : LiveStreamSource(LiveStreamProtocol.WebRtc);
+
+public sealed record UsbCameraLiveStreamSource(int DeviceIndex)
+    : LiveStreamSource(LiveStreamProtocol.UsbCamera);
 
 /// <summary>
 /// Bir canlı yayın oturumunun kullanıcı arayüzüne yansıtılan durumudur.
@@ -34,7 +47,9 @@ public interface ILiveStreamPlayer : IAsyncDisposable
 
     event EventHandler<LiveStreamErrorEventArgs>? ErrorOccurred;
 
-    Task StartAsync(Uri streamUri, CancellationToken cancellationToken = default);
+    Task StartAsync(
+        LiveStreamSource source,
+        CancellationToken cancellationToken = default);
 
     Task StopAsync();
 }

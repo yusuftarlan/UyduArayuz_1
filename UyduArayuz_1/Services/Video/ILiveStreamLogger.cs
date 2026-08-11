@@ -21,7 +21,7 @@ public sealed class ConsoleLiveStreamLogger : ILiveStreamLogger
         ArgumentNullException.ThrowIfNull(exception);
 
         string message =
-            $"[{DateTime.Now:HH:mm:ss}] [ERROR] WebRTC {operation}: {exception}";
+            $"[{DateTime.Now:HH:mm:ss}] [ERROR] Canlı kamera {operation}: {exception}";
 
         Debug.WriteLine(message);
         Console.Error.WriteLine(message);

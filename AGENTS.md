@@ -6,12 +6,14 @@ Bu dosya, bu repoda çalışan yapay zeka ajanları ve geliştiriciler için gü
 
 `UyduArayuz_1`, .NET 8 WPF ile geliştirilmiş bir yer istasyonu arayüzüdür. Uygulama seri porttan ikili telemetri çerçeveleri alır, çerçeveleri doğrulayıp `TelemetryPacket` modeline dönüştürür ve verileri anlık panel, grafik, alarm LED'leri, 3D durum göstergesi, harita, tablo ve log alanlarında gösterir.
 
-Uygulamada ayrıca WPF `MediaElement` tabanlı bir video oynatma altyapısı bulunur. Yerel video dosyaları ve desteklenen doğrudan ağ medya URI'leri aynı URI tabanlı session altyapısı üzerinden oynatılır. USB kamera için model türü hazırlanmıştır; ancak yakalama adapter'ı, session'ı ve factory'si henüz uygulanmamıştır.
+Canlı kamera altyapısı ortak `ILiveStreamPlayer` yaşam döngüsü altında iki kaynağı destekler. WebRTC yayınları MediaMTX player sayfasını `WebView2WebRtcPlaybackAdapter` ile açar. Varsayılan kaynak olan USB kamera ise `OpenCvUsbCameraPlaybackAdapter` ile Windows DirectShow/Media Foundation üzerinden yakalanır ve kareler WPF `Image` kontrolüne aktarılır. Kaynak türleri URI'ye zorlanmaz; `WebRtcLiveStreamSource` ve `UsbCameraLiveStreamSource` ayrı parametreler taşır.
 
 Ana teknoloji ve paketler:
 
 - `net8.0-windows` ve WPF
 - `System.IO.Ports` 10.0.6: seri port haberleşmesi
+- `Microsoft.Web.WebView2` 1.0.4078.44: MediaMTX WebRTC player sayfası
+- `OpenCvSharp4.Windows` 4.13.0.20260627: Windows USB kamera yakalama
 - `OxyPlot.Wpf` 2.2.0: canlı grafikler
 - `HelixToolkit.Wpf` 3.1.2: 3D attitude/durum göstergesi
 - `Mapsui.Wpf` 4.1.8: OpenStreetMap tabanlı harita
@@ -40,18 +42,31 @@ SerialPort byte akışı
     -> MainViewModel Dispatcher üzerinde panel, grafik, alarm, 3D ve geçmişi günceller
 ```
 
-URI tabanlı video için zihinsel model:
+WebRTC video için zihinsel model:
 
 ```text
-LiveCameraView kullanıcı girdisi
-    -> LocalFileSourceDescriptor veya NetworkStreamSourceDescriptor
-    -> LiveCameraViewModel
-    -> VideoPlaybackSessionResolver
-    -> UriPlaybackSessionFactory
-    -> UriPlaybackSession
-    -> IUriPlaybackAdapter
-    -> MediaElementPlaybackAdapter
-    -> WPF MediaElement
+LiveCameraView
+    -> WebRtcLiveStreamSource
+    -> LiveStreamPlayerResolver
+    -> WebRtcLiveStreamPlayerFactory
+    -> WebRtcLiveStreamPlayer
+    -> IWebRtcPlaybackAdapter
+    -> WebView2WebRtcPlaybackAdapter
+    -> MediaMTX player sayfası / WPF WebView2
+```
+
+USB kamera için zihinsel model:
+
+```text
+LiveCameraView (kamera numarası)
+    -> UsbCameraLiveStreamSource
+    -> LiveStreamPlayerResolver
+    -> UsbCameraLiveStreamPlayerFactory
+    -> UsbCameraLiveStreamPlayer
+    -> IUsbCameraPlaybackAdapter
+    -> OpenCvUsbCameraPlaybackAdapter
+    -> DirectShow veya Media Foundation
+    -> dondurulmuş BitmapSource / WPF Image
 ```
 
 ## Uygulama Giriş Noktası ve Yerleşim
@@ -66,7 +81,7 @@ Ana pencere:
 - Ana içerikte `CenterDisplayArea`.
 - Sağ sütunda `LiveCameraView`, `AttitudeIndicator` ve `Map`.
 - `Map` bileşeni `DataContext="{Binding MapViewControl}"` ile `MapViewModel` alır.
-- `LiveCameraView` kendi `MediaElement` bağımlılığı nedeniyle video composition root'unu kendi code-behind dosyasında kurar ve kendi `DataContext` değerini oluşturur.
+- `LiveCameraView`, WPF görüntü kontrolleri nedeniyle video composition root'unu kendi code-behind dosyasında kurar. Varsayılan protokol `UsbCamera`dır; WebRTC factory kaydı geriye dönük olarak korunur.
 
 ## Telemetri Modeli ve İkili Protokol
 
@@ -208,75 +223,53 @@ Merkezi telemetri koordinasyon noktasıdır:
 - İşaretçiyi günceller, `DataHasChanged()` çağırır, ilk konuma yakınlaşır ve sonraki konumları takip eder.
 - `Map.xaml.cs`, `DataContextChanged` ve `Loaded` sırasında `MyMapControl.Map` değerini ViewModel'den atar.
 
-### `LiveCameraViewModel`
+### `LiveCameraView` composition root
 
-Dosya: `UyduArayuz_1/ViewModels/LiveCameraViewModel.cs`
+Dosya: `UyduArayuz_1/Components/LiveCameraView.xaml.cs`
 
-- `IVideoPlaybackSessionResolver` constructor injection ile alınır.
-- `State`, `ErrorMessage` ve `CurrentSource` değerlerini UI'ya bildirir.
-- `StartAsync`, önceki session'ı bırakır ve uygun factory üzerinden yeni session başlatır.
-- `StopAsync`, devam eden başlangıcı iptal edip mevcut session'ı durdurur.
-- `SemaphoreSlim` ile start/stop/dispose yaşam döngüsünü sıralar.
-- `DisposeAsync`, session event aboneliğini kaldırır ve kaynakları kapatır.
-- Dispose sonrasında yeniden kullanımı `ObjectDisposedException` ile engeller.
+- Ayrı bir `LiveCameraViewModel` yoktur; WPF kontrol sahipliği ve composition kodu View code-behind içinde tutulur.
+- `LiveStreamPlayerResolver`, WebRTC ve USB factory'leriyle burada kurulur.
+- Varsayılan `ConfiguredProtocol`, `UsbCamera` değeridir.
+- Start, stop ve unload işlemleri `SemaphoreSlim` ile sıralanır; devam eden başlangıç iptal edilir ve player dispose edilir.
+- UI yalnızca state event'lerine göre düğmeleri etkinleştirir; kamera okuma işi adapter'ın arka plan görevindedir.
 
 ## Video Modeli, Session ve Adapter Katmanları
 
 ### Video kaynak modelleri
 
-Konum: `UyduArayuz_1/Models/Video`
+Konum: `UyduArayuz_1/Services/Video/LiveStreamContracts.cs`
 
-- `VideoSourceKind`: `UsbCamera`, `LocalFile`, `NetworkStream`.
-- `VideoSourceDescriptor`: `Id`, `DisplayName` ve soyut `Kind` alanlarını taşıyan temel record.
-- `LocalFileSourceDescriptor`: yerel `FilePath` taşır.
-- `NetworkStreamSourceDescriptor`: mutlak `StreamUri` taşır.
-- `UsbCameraSourceDescriptor`: `DeviceId` taşır; henüz oynatma uygulaması yoktur.
-- `VideoPlaybackState`: `Idle`, `Starting`, `Playing`, `Stopping`, `Faulted`.
+- `LiveStreamProtocol`: `WebRtc` ve `UsbCamera`.
+- `LiveStreamSource`: protokole özel kaynakların soyut temel record'u.
+- `WebRtcLiveStreamSource`: MediaMTX player sayfasının mutlak URI'sini taşır.
+- `UsbCameraLiveStreamSource`: Windows/OpenCV kamera sıra numarasını taşır.
+- `LiveStreamState`: `Idle`, `Starting`, `Playing`, `Stopping`, `Faulted`.
 
 ### Video servisleri
 
 Konum: `UyduArayuz_1/Services/Video`
 
-- `IVideoPlaybackSession`: kaynak, state, hata, state event'i ve async start/stop/dispose sözleşmesi.
-- `IVideoPlaybackSessionFactory`: bir kaynağı destekleyip desteklemediğini belirler ve session oluşturur.
-- `IVideoPlaybackSessionResolver`: uygun factory'yi seçer.
-- `VideoPlaybackSessionResolver`: sıfır eşleşmede `NotSupportedException`, birden fazla eşleşmede `InvalidOperationException` atar.
-- `IUriPlaybackAdapter`: URI kaynağını oynatma teknolojisinden ayırır.
-- `UriPlaybackSessionFactory`: yalnızca yerel dosya ve ağ kaynağı için `UriPlaybackSession` oluşturur.
-- `UriPlaybackSession`: kaynak doğrulaması, state geçişleri, adapter event'leri ve async yaşam döngüsünü yönetir.
+- `ILiveStreamPlayer`: protokol, state, hata event'leri ve async start/stop/dispose sözleşmesi.
+- `ILiveStreamPlayerFactory`: tek bir protokol için player oluşturur.
+- `LiveStreamPlayerResolver`: protokole göre tam bir factory seçer; sıfır veya birden fazla eşleşmeyi hata sayar.
+- `WebRtcLiveStreamPlayer`: WebRTC adapter yaşam döngüsünü yönetir.
+- `UsbCameraLiveStreamPlayer`: USB adapter yaşam döngüsünü yönetir.
 
-### `MediaElementPlaybackAdapter`
+### Video adapter'ları
 
-Dosya: `UyduArayuz_1/Adapters/Video/MediaElementPlaybackAdapter.cs`
-
-- WPF `MediaElement` nesnesini `IUriPlaybackAdapter` arkasına alır.
-- UI işlemlerini `MediaElement.Dispatcher` üzerinde yürütür.
-- `MediaOpened` gelene kadar `TaskCompletionSource` bekler.
-- `MediaEnded` ve `MediaFailed` olaylarını servis katmanına aktarır.
-- Stop sırasında bekleyen açılışı iptal eder ve medya kaynağını temizler.
-- `IAsyncDisposable` ile WPF event aboneliklerini kaldırır.
-
-`MediaElement` desteği kurulu Windows medya codec'leri ve desteklenen protokollerle sınırlıdır. Network girişine web sayfası URL'si değil, doğrudan ve mutlak bir medya URI'si verilmelidir. YouTube/Twitch sayfası, HLS/DASH manifesti veya RTSP adresi mevcut adapter ile otomatik olarak desteklenmiş sayılmaz.
+- `WebView2WebRtcPlaybackAdapter`, MediaMTX WebRTC player sayfasını WebView2'de açar. Sayfanın video event'lerini JavaScript mesajlarıyla izler; gezinmeyi aynı HTTPS origin ile sınırlar ve kamera/mikrofon izinlerini reddeder.
+- `OpenCvUsbCameraPlaybackAdapter`, önce DirectShow sonra Media Foundation arka ucuyla kamera sıra numarasını açar. Kareleri UI dışında okur, dondurulmuş `BitmapSource` üretir ve render kuyruğunda yalnızca en yeni kareyi WPF `Image` kontrolüne verir.
+- Her iki adapter da start, stop, hata ve dispose davranışını kendi protokol player'ına event/sözleşme üzerinden aktarır.
 
 ### `LiveCameraView`
 
-- Yerel dosya seçimi, yerel oynatma, ağ adresi oynatma ve durdurma kontrollerini içerir.
-- State, kaynak adı ve hata mesajını `LiveCameraViewModel` üzerinden gösterir.
-- `Loaded` sırasında adapter → factory → resolver → ViewModel zincirini kurar.
-- `Unloaded` sırasında önce ViewModel/session, sonra adapter/MediaElement kaynaklarını kapatır.
-- Dosya seçici ve UI event yönlendirmeleri code-behind'dadır; gerçek oynatma ve state mantığı ViewModel/session/adapter katmanlarındadır.
+- Kamera sıra numarası, başlatma ve durdurma kontrollerini içerir.
+- USB için WPF `Image`, korunan WebRTC hattı için `WebView2` yüzeyi bulunur; seçilen protokole göre yalnızca biri görünür.
+- `Unloaded` sırasında başlangıç iptal edilir ve player üzerinden adapter kaynakları kapatılır.
 
 ### USB kamera sınırı
 
-`UsbCameraSourceDescriptor` yalnızca model seviyesinde hazırdır. Şunlar henüz yoktur:
-
-- USB cihaz listeleme ve seçim servisi
-- `IUsbCameraAdapter` benzeri yakalama soyutlaması
-- `UsbCameraPlaybackSession`
-- `UsbCameraPlaybackSessionFactory`
-- WPF üzerinde kare gösterimi veya özel kamera kontrolü
-
-USB kamerayı `MediaElement` URI akışına zorla ekleme. USB kamera cihaz kimliği üzerinden açılan bir capture kaynağıdır; ayrı adapter/session/factory ile resolver'a katılmalıdır.
+USB kamera yakalama hattı uygulanmıştır. UI şu anda aygıtları adlarıyla listelemek yerine OpenCV kamera sıra numarası (`0`, `1`, ...) alır. Kamera adlarıyla seçim gerekirse bu iş ayrı bir Windows cihaz keşif servisine eklenmeli; yakalama adapter'ı ve player yaşam döngüsü değiştirilmemelidir.
 
 ## Component Katmanı
 
@@ -288,7 +281,7 @@ WPF `UserControl` dosyaları `UyduArayuz_1/Components` altındadır:
 - `GraphDashboard`: OxyPlot grafikleri.
 - `TelemetryTable`: `TelemetryHistory` tablosu.
 - `LogPanel`: `LoggerService.Instance.Logs` görünümü.
-- `LiveCameraView`: yerel ve ağ videosu kontrolleri ile `MediaElement`.
+- `LiveCameraView`: USB kamera görüntüsü için `Image`, korunan WebRTC hattı için `WebView2` ve kamera kontrolleri.
 - `AttitudeIndicator`: HelixToolkit 3D attitude görünümü.
 - `Map`: Mapsui WPF harita kontrolü.
 
@@ -304,7 +297,7 @@ Yeni UI eklerken:
 - Arka plan thread'inden doğrudan UI-bound koleksiyon veya property güncellemesi yapma.
 - Telemetri UI güncellemelerini `MainViewModel` içindeki Dispatcher sınırında tut.
 - Servis katmanına WPF kontrolü veya `Dispatcher` bağımlılığı ekleme.
-- `MediaElement` bağımlılığını adapter ve View composition noktasında tut; ViewModel `MediaElement` bilmemelidir.
+- WPF `Image`/`WebView2` bağımlılığını adapter ve View composition noktasında tut; player sözleşmeleri WPF kontrolü bilmemelidir.
 - UI-bound property değişiyorsa `INotifyPropertyChanged` gereksinimini kontrol et.
 - Event aboneliklerini sahiplik sırasına göre kaldır; View kapanırken önce session/ViewModel, sonra adapter dispose edilmelidir.
 - Async start/stop/dispose işlemlerinde iptal, tekrar çağrı ve eşzamanlı çağrı davranışlarını koru.
@@ -317,7 +310,7 @@ Yaygın binding yolları:
 - `HeaderControlViewModel.ConnectCommand`
 - `AlarmPanelViewModel.GpsErrorLed`
 - `MapViewControl`
-- Video View içinde `State`, `ErrorMessage`, `CurrentSource.DisplayName`
+- Video View içinde player `StateChanged` ve `ErrorOccurred` event'leri
 
 ## Arduino Telemetri Simülatörü
 
@@ -374,8 +367,9 @@ Bu bölüm mevcut davranışı belgeleyen bir yön tabelasıdır; maddelerin bel
 
 ### Video
 
-- Yerel MP4 oynatma doğrulanmıştır; ağ kaynağında codec/protokol desteği `MediaElement` ve Windows ortamına bağlıdır.
-- USB kamera altyapısı uygulanmamıştır.
+- WebRTC oynatma MediaMTX player sayfası ve kurulu WebView2 Runtime'a bağlıdır.
+- USB oynatma OpenCvSharp Windows native runtime, kamera sürücüsü ve Windows kamera gizlilik iznine bağlıdır.
+- UI aygıt adlarını listelemez; doğru kamera sıra numarası kullanıcı tarafından seçilmelidir.
 - `async void` WPF event handler'larında tüm hata yollarının kullanıcıya gösterildiğini veya loglandığını kontrol et.
 - Adapter/session event aboneliklerini değiştirirken dispose sırasını ve bekleyen `MediaOpened` iptalini koru.
 
