@@ -1,32 +1,38 @@
-using System;
+using System.Buffers.Binary;
 
 namespace UyduArayuz_1.Services
 {
     public static class TelemetryCrc32
     {
-        private const uint Polynomial = 0xEDB88320;
+        private const uint Polynomial = 0x04C11DB7;
+        private const uint InitialValue = 0xFFFFFFFF;
 
         public static uint Compute(ReadOnlySpan<byte> data)
         {
-            uint crc = 0xFFFFFFFF;
-
-            foreach (byte value in data)
+            if (data.Length % sizeof(uint) != 0)
             {
-                crc ^= value;
+                throw new ArgumentException(
+                    "STM32 CRC input length must be a multiple of four bytes.",
+                    nameof(data));
+            }
 
-                for (int bit = 0; bit < 8; bit++)
+            uint crc = InitialValue;
+
+            for (int offset = 0; offset < data.Length; offset += sizeof(uint))
+            {
+                uint word = BinaryPrimitives.ReadUInt32LittleEndian(
+                    data.Slice(offset, sizeof(uint)));
+                crc ^= word;
+
+                for (int bit = 0; bit < 32; bit++)
                 {
-                    bool leastSignificantBitSet = (crc & 1) != 0;
-                    crc >>= 1;
-
-                    if (leastSignificantBitSet)
-                    {
-                        crc ^= Polynomial;
-                    }
+                    crc = (crc & 0x80000000) != 0
+                        ? (crc << 1) ^ Polynomial
+                        : crc << 1;
                 }
             }
 
-            return crc ^ 0xFFFFFFFF;
+            return crc;
         }
     }
 }

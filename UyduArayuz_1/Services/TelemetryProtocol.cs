@@ -1,38 +1,46 @@
-using System;
-
 namespace UyduArayuz_1.Services
 {
     public static class TelemetryProtocol
     {
-        public const byte StartByte = 0x3C; // '<<<<'
-        public const byte EndByte = 0x3E;   // '>>>>'
+        public const uint StartMarker = 0x3C3C3C3C; // "<<<<"
+        public const uint EndMarker = 0x3E3E3E3E;   // ">>>>"
+        public const byte StartByte = 0x3C;
+        public const byte EndByte = 0x3E;
 
-        public const int PacketLength = 64;
+        public const int PacketLength = 80;
 
-        public const int StartOffset = 0; // 1 byte 
-        public const int PacketNoOffset = 1; // 2 bytes
-        public const int SatelliteStatusOffset = 3; // 1 byte
-        public const int ErrorCodeOffset = 4; // 1 byte
-        public const int SentTimeOffset = 5; // 4 bytes
-        public const int PressureOffset = 9;  // 4 bytes  
-        public const int HeightOffset = 13; // 4 bytes
-        public const int LandingSpeedOffset = 17; // 4 bytes
-        public const int TemperatureOffset = 21; // 4 bytes
-        public const int BatteryVoltageOffset = 25; // 4 bytes
-        public const int GpsLatitudeOffset = 29; // 4 bytes
-        public const int GpsLongitudeOffset = 33; // 4 bytes
-        public const int GpsAltitudeOffset = 37; // 4 bytes
-        public const int PitchOffset = 41; // 4 bytes
-        public const int RollOffset = 45; // 4 bytes
-        public const int YawOffset = 49; // 4 bytes
-        public const int TaskCodeOffset = 53; // 6 bytes
-        public const int TeamNoOffset = 59; // 1 byte
-        public const int CrcOffset = 60; // 4 bytes
-        public const int EndOffset = 64; // 1 byte
+        public const int StartOffset = 0; // uint32_t, 4 bytes
+        public const int PacketNoOffset = 4; // uint32_t, 4 bytes
+        public const int SatelliteStatusOffset = 8; // uint16_t, 2 bytes
+        public const int ErrorCodeOffset = 10; // uint16_t, 2 bytes
+        public const int RtcYearOffset = 12; // uint8_t
+        public const int RtcMonthOffset = 13; // uint8_t
+        public const int RtcDayOffset = 14; // uint8_t
+        public const int RtcHourOffset = 15; // uint8_t
+        public const int RtcMinuteOffset = 16; // uint8_t
+        public const int RtcSecondOffset = 17; // uint8_t
+        public const int PressureOffset = 18; // float, 4 bytes
+        public const int HeightOffset = 22; // float, 4 bytes
+        public const int LandingSpeedOffset = 26; // float, 4 bytes
+        public const int TemperatureOffset = 30; // float, 4 bytes
+        public const int BatteryVoltageOffset = 34; // float, 4 bytes
+        public const int GpsLatitudeOffset = 38; // float, 4 bytes
+        public const int GpsLongitudeOffset = 42; // float, 4 bytes
+        public const int GpsAltitudeOffset = 46; // float, 4 bytes
+        public const int PitchOffset = 50; // float, 4 bytes
+        public const int RollOffset = 54; // float, 4 bytes
+        public const int YawOffset = 58; // float, 4 bytes
+        public const int TaskCodeOffset = 62; // uint8_t[6]
+        public const int TeamNoOffset = 68; // uint32_t, 4 bytes
+        public const int CrcOffset = 72; // uint32_t, 4 bytes
+        public const int EndOffset = 76; // uint32_t, 4 bytes
 
+        public const int MarkerLength = 4;
         public const int TaskCodeLength = 6;
         public const int CrcLength = 4;
-        public const int CrcStartOffset = PacketNoOffset;
+        // The STM32 CRC peripheral processes packet_start through team_number
+        // as 32-bit little-endian words. The CRC and end marker are excluded.
+        public const int CrcStartOffset = StartOffset;
         public const int CrcPayloadLength = CrcOffset - CrcStartOffset;
 
         public static string GetSatelliteStatusText(int status) => status switch
@@ -67,12 +75,5 @@ namespace UyduArayuz_1.Services
             _ => "Bilinmeyen veya Ge\u00e7ersiz Stat\u00fc!"
         };
 
-        public static string FormatUnixTimestamp(uint unixTimestamp)
-        {
-            return DateTimeOffset
-                .FromUnixTimeSeconds(unixTimestamp)
-                .ToLocalTime()
-                .ToString("dd.MM.yyyy HH:mm:ss");
-        }
     }
 }

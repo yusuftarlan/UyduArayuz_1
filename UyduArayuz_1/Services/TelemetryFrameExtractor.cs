@@ -7,6 +7,8 @@ namespace UyduArayuz_1.Services
     {
         private readonly List<byte> _buffer = new List<byte>();
 
+        public int BufferedByteCount => _buffer.Count;
+
         public void Clear()
         {
             _buffer.Clear();
@@ -33,10 +35,13 @@ namespace UyduArayuz_1.Services
         {
             while (true)
             {
-                int startIndex = _buffer.IndexOf(TelemetryProtocol.StartByte);
+                int startIndex = FindMarker(
+                    _buffer,
+                    TelemetryProtocol.StartByte,
+                    TelemetryProtocol.MarkerLength);
                 if (startIndex < 0)
                 {
-                    _buffer.Clear();
+                    PreservePossibleMarkerPrefix();
                     return;
                 }
 
@@ -50,9 +55,13 @@ namespace UyduArayuz_1.Services
                     return;
                 }
 
-                if (_buffer[TelemetryProtocol.EndOffset] != TelemetryProtocol.EndByte) // Check for the end byte
+                if (!MarkerMatches(
+                    _buffer,
+                    TelemetryProtocol.EndOffset,
+                    TelemetryProtocol.EndByte,
+                    TelemetryProtocol.MarkerLength))
                 {
-                    _buffer.RemoveAt(0); // Remove the start byte and look for the next one
+                    _buffer.RemoveAt(0);
                     continue;
                 }
 
@@ -60,6 +69,74 @@ namespace UyduArayuz_1.Services
                 frames.Add(frame);
                 _buffer.RemoveRange(0, TelemetryProtocol.PacketLength);
             }
+        }
+
+        private void PreservePossibleMarkerPrefix()
+        {
+            int bytesToKeep = 0;
+            int maximumPrefixLength = Math.Min(
+                _buffer.Count,
+                TelemetryProtocol.MarkerLength - 1);
+
+            for (int length = maximumPrefixLength; length > 0; length--)
+            {
+                bool isPrefix = true;
+                for (int index = _buffer.Count - length; index < _buffer.Count; index++)
+                {
+                    if (_buffer[index] != TelemetryProtocol.StartByte)
+                    {
+                        isPrefix = false;
+                        break;
+                    }
+                }
+
+                if (isPrefix)
+                {
+                    bytesToKeep = length;
+                    break;
+                }
+            }
+
+            if (_buffer.Count > bytesToKeep)
+            {
+                _buffer.RemoveRange(0, _buffer.Count - bytesToKeep);
+            }
+        }
+
+        private static int FindMarker(List<byte> buffer, byte markerByte, int markerLength)
+        {
+            int lastStartIndex = buffer.Count - markerLength;
+            for (int startIndex = 0; startIndex <= lastStartIndex; startIndex++)
+            {
+                if (MarkerMatches(buffer, startIndex, markerByte, markerLength))
+                {
+                    return startIndex;
+                }
+            }
+
+            return -1;
+        }
+
+        private static bool MarkerMatches(
+            List<byte> buffer,
+            int offset,
+            byte markerByte,
+            int markerLength)
+        {
+            if (offset < 0 || offset + markerLength > buffer.Count)
+            {
+                return false;
+            }
+
+            for (int index = 0; index < markerLength; index++)
+            {
+                if (buffer[offset + index] != markerByte)
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
     }
 }

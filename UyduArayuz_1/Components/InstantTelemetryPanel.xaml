@@ -39,14 +39,9 @@
             <TextBlock Grid.Row="1" Grid.Column="1" x:Name="txtPaketNo" Text="{Binding CurrentPacket.PacketNo}" Foreground="White" FontWeight="Bold" HorizontalAlignment="Right"/>
 
             <TextBlock Grid.Row="2" Grid.Column="0" Text="Uydu Statüsü:" Foreground="LightGray" Margin="0,3"/>
-            <TextBlock Grid.Row="2" Grid.Column="1" x:Name="txtStatus" Foreground="White" FontWeight="Bold" HorizontalAlignment="Right">
-            <TextBlock.Text>
-                <MultiBinding StringFormat="{}{0})">
-                    <Binding Path="CurrentPacket.SatelliteStatus" />
-                        <!-- <Binding Path="CurrentPacket.SatelliteStatusString" /> -->
-                    </MultiBinding>
-            </TextBlock.Text>
-            </TextBlock>
+            <TextBlock Grid.Row="2" Grid.Column="1" x:Name="txtStatus"
+                       Text="{Binding CurrentPacket.SatelliteStatus}"
+                       Foreground="White" FontWeight="Bold" HorizontalAlignment="Right"/>
 
             <TextBlock Grid.Row="3" Grid.Column="0" Text="Hata Kodu:" Foreground="LightGray" Margin="0,3"/>
             <TextBlock Grid.Row="3" Grid.Column="1" x:Name="txtError" Foreground="White" FontWeight="Bold" HorizontalAlignment="Right">

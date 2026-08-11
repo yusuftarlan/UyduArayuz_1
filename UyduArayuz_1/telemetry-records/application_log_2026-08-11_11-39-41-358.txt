@@ -1,0 +1,7 @@
+﻿Application WARN/ERROR log
+[2026-08-11 11:40:18.719] [ERROR] Paraşüt açma komutu gönderilemedi: Komutlar yalnızca COM6 üzerinden gönderilebilir; açık port COM7.
+[2026-08-11 11:40:21.385] [ERROR] Ayrılma komutu gönderilemedi: Komutlar yalnızca COM6 üzerinden gönderilebilir; açık port COM7.
+[2026-08-11 11:40:28.143] [ERROR] Görev kodu gönderilemedi: Komutlar yalnızca COM6 üzerinden gönderilebilir; açık port COM7.
+[2026-08-11 11:40:35.731] [ERROR] Görev kodu gönderilemedi: Komutlar yalnızca COM6 üzerinden gönderilebilir; açık port COM7.
+[2026-08-11 11:40:37.151] [ERROR] Görev kodu gönderilemedi: Komutlar yalnızca COM6 üzerinden gönderilebilir; açık port COM7.
+[2026-08-11 11:40:39.771] [WARN] Bağlantı kesildi: COM7.

@@ -126,6 +126,25 @@ Thread kuralları:
 - UI thread'e geçiş `MainViewModel.TelemetryService_OnTelemetryReceived` içinde yapılır.
 - `LoggerService` koleksiyonu `BindingOperations.EnableCollectionSynchronization` ile eşzamanlı erişime açılmıştır.
 
+### COM6 görev komutları
+
+- Acil paraşüt ve ayrılma komutları `HeaderControlViewModel` callback'leri üzerinden `MainViewModel`'e, oradan `SerialTelemetryService.SendCommand` metoduna ulaşır.
+- Komutlar yalnızca açık port `COM6` ise gönderilir.
+- Ayrılma değeri `0`, acil paraşüt değeri `1` olarak tanımlıdır.
+- Her komut 4 baytlık little-endian bir değer olarak yazılır: ayrılma `00 00 00 00`, acil paraşüt `01 00 00 00`.
+- Bu protokol değiştirilirken `MainViewModel` komut sabitleri, `SerialTelemetryService` payload üretimi ve karşı tarafın 4 baytlık okuma düzeni birlikte kontrol edilmelidir.
+
+Görev kodu gönderimi aynı COM6 yazma sınırını kullanır ancak dört bağımsız bayttan oluşur:
+
+```text
+0b10101010, birinci rakam, ikinci rakam, üçüncü rakam
+```
+
+- İlk bayt koda gömülü `10101010` bit desenidir (`0xAA`, ondalık 170).
+- Kullanıcı girişi tam 3 karakter olmalı ve her karakter yalnızca `0`, `1` veya `2` olmalıdır.
+- Üç rakam sayının yüzler/onlar/birler karşılığına çevrilmez; her biri ayrı bir bayta yazılır. Örneğin `120` girişi `AA 01 02 00` paketini üretir.
+- `HeaderControl.xaml` giriş ve düğme binding'lerini, `HeaderControlViewModel` giriş state'i ile callback'i, `MainViewModel` doğrulama/paketlemeyi, `SerialTelemetryService` ise tam 4 baytlık tek yazma işlemini yönetir.
+
 ### `LoggerService`
 
 Dosya: `UyduArayuz_1/Services/LoggerService.cs`

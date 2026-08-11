@@ -13,6 +13,7 @@ namespace UyduArayuz_1.ViewModels
         // Renk Tanımlamaları (Yeşil = Sağlam, Kırmızı = Hata)
         private readonly SolidColorBrush _ledOn = new SolidColorBrush(Color.FromRgb(46, 204, 113));  // #2ECC71
         private readonly SolidColorBrush _ledError = new SolidColorBrush(Color.FromRgb(231, 76, 60)); // #E74C3C
+        private bool _isAnyAlarmActive;
 
         public event PropertyChangedEventHandler PropertyChanged;
         protected void OnPropertyChanged([CallerMemberName] string propertyName = null)
@@ -57,9 +58,9 @@ namespace UyduArayuz_1.ViewModels
         }
 
         // Telemetriden gelen "0000" şeklindeki kodu çözen metot
-        public void UpdateAlarms(int ErrorCode)
+        public bool UpdateAlarms(int ErrorCode)
         {
-            if (ErrorCode < 0 || ErrorCode > 15) return;
+            if (ErrorCode < 0 || ErrorCode > 15) return _isAnyAlarmActive;
 
             else if (ErrorCode == 0)
             {
@@ -76,8 +77,9 @@ namespace UyduArayuz_1.ViewModels
             SeperationErrorLed         = ((ErrorCode & (1 << 2)) != 0) ? _ledError : _ledOn;
             EmergencyParachuteErrorLed = ((ErrorCode & (1 << 3)) != 0) ? _ledError : _ledOn;
 
-
-        }  
+            _isAnyAlarmActive = ErrorCode != 0;
+            return _isAnyAlarmActive;
+        }
 
     }
 }

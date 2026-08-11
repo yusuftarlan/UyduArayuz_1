@@ -1,55 +1,113 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
-using System.IO.Ports;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Windows;
 using System.Windows.Data;
 
 namespace UyduArayuz_1.Services
 {
-    public struct LogModel
+    public readonly struct LogModel
     {
-        public string Time { get; set; }
-        public string Level { get; set; }
-        public string Message { get; set; }
+        public DateTime Timestamp { get; init; }
+        public string Level { get; init; }
+        public string Message { get; init; }
 
-        public override string ToString() => $"[{Time}] [{Level}] {Message}";
+        public override string ToString() => $"[{Timestamp:HH:mm:ss}] [{Level}] {Message}";
     }
-    public class LoggerService
+
+    public sealed class LoggerService : IDisposable
     {
-        // Tüm uygulamanın ulaşacağı tekil (Singleton) kopya
-        public static LoggerService Instance { get; private set; }
+        private const int MaximumVisibleLogCount = 20;
+
+        private readonly object _logLock = new object();
+        private readonly ApplicationLogRecorder? _persistentRecorder;
+        private int _disposeState;
 
         public ObservableCollection<LogModel> Logs { get; } = new ObservableCollection<LogModel>();
-        private readonly object _logLock = new object();
 
-        // Senin bahsettiğin o kurucu metot!
-        // Sadece 'new' dendiği an çalışır.
-        public LoggerService()
+        public LoggerService(ApplicationLogRecorder? persistentRecorder = null)
         {
-            // Kurucu metot çalıştığı an UI Thread'de isek, güvenliği sağlar.
+            _persistentRecorder = persistentRecorder;
             BindingOperations.EnableCollectionSynchronization(Logs, _logLock);
-
-            // Kendisini küresel erişime açar
-            Instance = this;
         }
 
-        public void AddLog(string message, string level = "INFO")
+        public void AddLog(
+            string message,
+            string level,
+            bool writeToFile = true)
         {
-            // Sadece tek string yerine, modeli doldurup listeye atıyoruz
-            var newLog = new LogModel
+            LogModel newLog = CreateLog(message, level);
+            AddToVisibleLogs(newLog);
+
+            if (writeToFile && IsWarnOrError(newLog.Level))
             {
-                Time = DateTime.Now.ToString("HH:mm:ss"),
-                Level = level,
+                TryWriteToFile(newLog);
+            }
+        }
+
+        public void AddPersistentLog(string message, string level)
+        {
+            LogModel newLog = CreateLog(message, level);
+            if (!IsWarnOrError(newLog.Level))
+            {
+                throw new ArgumentException(
+                    "Persistent application logs must use WARN or ERROR level.",
+                    nameof(level));
+            }
+
+            TryWriteToFile(newLog);
+        }
+
+        private static LogModel CreateLog(string message, string level)
+        {
+            ArgumentNullException.ThrowIfNull(message);
+
+            string normalizedLevel = string.IsNullOrWhiteSpace(level)
+                ? "INFO"
+                : level.Trim().ToUpperInvariant();
+
+            return new LogModel
+            {
+                Timestamp = DateTime.Now,
+                Level = normalizedLevel,
                 Message = message
             };
+        }
 
-            Logs.Add(newLog);
+        private void AddToVisibleLogs(LogModel log)
+        {
+            if (!IsWarnOrError(log.Level))
+            {
+                return;
+            }
+
+            lock (_logLock)
+            {
+                Logs.Add(log);
+                while (Logs.Count > MaximumVisibleLogCount)
+                {
+                    Logs.RemoveAt(0);
+                }
+            }
+        }
+
+        private void TryWriteToFile(LogModel log)
+        {
+            if (_persistentRecorder != null && !_persistentRecorder.TryRecord(log))
+            {
+                Debug.WriteLine("Application log could not be queued for the TXT recorder.");
+            }
+        }
+
+        private static bool IsWarnOrError(string level) =>
+            level is "WARN" or "ERROR";
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _disposeState, 1) != 0)
+            {
+                return;
+            }
+
+            _persistentRecorder?.Dispose();
         }
     }
 }

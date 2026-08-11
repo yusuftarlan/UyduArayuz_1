@@ -21,9 +21,12 @@ namespace UyduArayuz_1.ViewModels
 
         public Action<string, int> ConnectRequested;
         public Action DisconnectRequested;
+        public Action? OpenParachuteRequested;
+        public Action? SeparationRequested;
+        public Action<string>? SendMissionCodeRequested;
 
         public ObservableCollection<string> AvailablePorts { get; set; } = new ObservableCollection<string>();
-        public ObservableCollection<int> BaudRates { get; set; } = new ObservableCollection<int> { 9600, 19200, 38400, 57600, 115200 };
+        public ObservableCollection<int> BaudRates { get; set; } = new ObservableCollection<int> {4800, 9600, 19200, 38400, 57600, 115200 };
 
         
 
@@ -31,6 +34,16 @@ namespace UyduArayuz_1.ViewModels
 
         public RelayCommand ConnectCommand { get; set; }
         public RelayCommand DisconnectCommand { get; set; }
+        public RelayCommand OpenParachuteCommand { get; set; }
+        public RelayCommand SeparationCommand { get; set; }
+        public RelayCommand SendMissionCodeCommand { get; set; }
+
+        private string _missionCode = string.Empty;
+        public string MissionCode
+        {
+            get => _missionCode;
+            set { _missionCode = value ?? string.Empty; OnPropertyChanged(); }
+        }
 
         private string _selectedPort;
         public string SelectedPort
@@ -81,6 +94,9 @@ namespace UyduArayuz_1.ViewModels
             RefreshPortsCommand = new RelayCommand(RefreshPorts);
             ConnectCommand = new RelayCommand(ConnectCommandExecuted);
             DisconnectCommand = new RelayCommand(DisconnectCommandExecuted);
+            OpenParachuteCommand = new RelayCommand(_ => OpenParachuteRequested?.Invoke());
+            SeparationCommand = new RelayCommand(_ => SeparationRequested?.Invoke());
+            SendMissionCodeCommand = new RelayCommand(_ => SendMissionCodeRequested?.Invoke(MissionCode));
             RefreshPorts(null); // Açılışta portları bir kez tara
 
         }
