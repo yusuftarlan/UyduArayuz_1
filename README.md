@@ -2,7 +2,9 @@
 
 `teknofest-uydu-arayuz`, bir model uydudan seri port üzerinden alınan ikili telemetri verilerini doğrulamak, kaydetmek ve gerçek zamanlı olarak görselleştirmek amacıyla geliştirilmiş bir Windows yer istasyonu uygulamasıdır.
 
-Uygulama; anlık telemetri panelini, zaman serisi grafiklerini, hata göstergelerini, sesli alarmı, GPS haritasını, üç boyutlu durum göstergesini, paket geçmişini ve USB kamera görüntüsünü tek bir WPF arayüzünde bir araya getirir. Görev komutları güvenlik amacıyla yalnızca açık `COM6` bağlantısı üzerinden gönderilebilir.
+Uygulama; anlık telemetri panelini, zaman serisi grafiklerini, hata göstergelerini, sesli alarmı, GPS haritasını, üç boyutlu durum göstergesini, paket geçmişini ve USB kamera görüntüsünü tek bir WPF arayüzünde bir araya getirir. Görev komutları  yalnızca açık `COM6` bağlantısı üzerinden gönderilebilir. Alternatif konfigrasyonlar kod değişikliği ile yapılabilir.
+
+![image info](docs/images/sh-1.png)
 
 ## Temel özellikler
 
