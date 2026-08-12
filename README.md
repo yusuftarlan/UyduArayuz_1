@@ -214,5 +214,3 @@ dotnet run --project .\teknofest-uydu-arayuz\teknofest-uydu-arayuz.csproj
 - Kamera aygıtları adlarıyla listelenmez; OpenCV kamera sıra numarası (`0`, `1`, ...) kullanılır.
 - Görev komutları yalnızca `COM6` üzerinden gönderilebilir.
 - Harita, OpenStreetMap döşemelerini çevrim içi olarak alır.
-- Çözümde henüz otomatik test projesi bulunmamaktadır.
-- Donanıma bağlı seri port ve kamera davranışları yalnızca fiziksel sistem üzerinde tam olarak doğrulanabilir.
