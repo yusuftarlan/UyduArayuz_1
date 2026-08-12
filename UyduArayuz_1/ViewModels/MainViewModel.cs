@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Runtime.CompilerServices;
 using System.Windows;
+using UyduArayuz_1.Configuration;
 using UyduArayuz_1.Models;
 using UyduArayuz_1.Services;
 
@@ -63,8 +64,10 @@ namespace UyduArayuz_1.ViewModels
 
         public MapViewModel MapViewControl { get; set; }
 
-        public MainViewModel()
+        public MainViewModel(ApplicationSettings applicationSettings)
         {
+            ArgumentNullException.ThrowIfNull(applicationSettings);
+
             // Kutunun başlangıçta boş görünmemesi için sahte(dummy) bir boş kutu koyabiliriz
             CurrentPacket = new TelemetryPacket();
 
@@ -115,7 +118,7 @@ namespace UyduArayuz_1.ViewModels
 
             AlarmPanelViewModel = new AlarmPanelViewModel();
 
-            GraphViewModel = new GraphDashboardViewModel();
+            GraphViewModel = new GraphDashboardViewModel(applicationSettings.BatteryGraph);
 
             AttitudeViewModel = new AttitudeViewModel();
 

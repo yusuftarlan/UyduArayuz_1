@@ -8,6 +8,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
+using UyduArayuz_1.Configuration;
 using UyduArayuz_1.ViewModels;
 
 namespace UyduArayuz_1
@@ -20,7 +21,8 @@ namespace UyduArayuz_1
         public MainWindow()
         {
             InitializeComponent();
-            MainViewModel mainViewModel = new MainViewModel();
+            ApplicationSettings applicationSettings = ApplicationSettingsLoader.Load();
+            MainViewModel mainViewModel = new MainViewModel(applicationSettings);
 
             this.DataContext = mainViewModel; //Tüm arayüzün veri kaynağı olaran MainViewModel'ı atıyoruz
         }

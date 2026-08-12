@@ -8,18 +8,24 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.Text;
+using UyduArayuz_1.Configuration;
 using UyduArayuz_1.Models;
 using UyduArayuz_1.Services;
 namespace UyduArayuz_1.ViewModels
 {
     public  class GraphDashboardViewModel
     {
+        private readonly BatteryGraphSettings _batteryGraphSettings;
+
         public PlotModel PacketModel { get; private set; }
         public PlotModel HeightModel { get; private set; }
         public PlotModel PressureModel { get; private set; }
         public PlotModel VelocityModel { get; private set; }
         public PlotModel TemperatureModel { get; private set; }
-        public PlotModel VoltageModel { get; private set; }
+        public PlotModel BatteryModel { get; private set; }
+        public string BatteryGraphTitle => _batteryGraphSettings.UseFixedPercentage
+            ? "Batarya (%)"
+            : "Pil Gerilimi (V)";
         public PlotModel OrientationModel { get; private set; }
         public PlotModel RouteModel { get; private set; }
         public PlotModel SpareModel { get; private set; }
@@ -27,9 +33,12 @@ namespace UyduArayuz_1.ViewModels
         private const int MaxDataPoints = 60;
         public readonly int MarkerSize = 3;
 
-        public GraphDashboardViewModel()
+        public GraphDashboardViewModel(BatteryGraphSettings batteryGraphSettings)
         {
-                InitializeGraphs();
+            _batteryGraphSettings = batteryGraphSettings
+                ?? throw new ArgumentNullException(nameof(batteryGraphSettings));
+
+            InitializeGraphs();
         }
 
         private void InitializeGraphs()
@@ -85,9 +94,16 @@ namespace UyduArayuz_1.ViewModels
             TemperatureModel = CreateDarkAvionicsModel("C");
             TemperatureModel.Series.Add(new LineSeries { Color = OxyColors.Orange, StrokeThickness = 2, MarkerType = MarkerType.Circle, MarkerSize = MarkerSize });
 
-            // 6. Pil Gerilimi
-            VoltageModel = CreateDarkAvionicsModel("V");
-            VoltageModel.Series.Add(new LineSeries { Color = OxyColors.Red, StrokeThickness = 2, MarkerType = MarkerType.Circle, MarkerSize = MarkerSize });
+            // 6. Batarya
+            BatteryModel = CreateDarkAvionicsModel(_batteryGraphSettings.UseFixedPercentage ? "%" : "V");
+            BatteryModel.Series.Add(new LineSeries { Color = OxyColors.Red, StrokeThickness = 2, MarkerType = MarkerType.Circle, MarkerSize = MarkerSize });
+
+            if (_batteryGraphSettings.UseFixedPercentage)
+            {
+                LinearAxis batteryAxis = (LinearAxis)BatteryModel.Axes.Single(axis => axis.Position == AxisPosition.Left);
+                batteryAxis.Minimum = 0;
+                batteryAxis.Maximum = 100;
+            }
 
             // 7. Oryantasyon (Pitch, Roll, Yaw)
            /* OrientationModel = CreateDarkAvionicsModel("o");
@@ -227,13 +243,17 @@ namespace UyduArayuz_1.ViewModels
                 TemperatureModel.InvalidatePlot(true);
             }
 
-            // 5. Pil Gerilimi
-            lock (VoltageModel.SyncRoot)
+            // 5. Batarya: config açıksa geçici sabit yüzde, kapalıysa telemetri voltajı.
+            lock (BatteryModel.SyncRoot)
             {
-                var series = (LineSeries)VoltageModel.Series[0];
-                series.Points.Add(new DataPoint(xValue, packet.BatteryVoltage));
+                double batteryValue = _batteryGraphSettings.UseFixedPercentage
+                    ? _batteryGraphSettings.FixedPercentage
+                    : packet.BatteryVoltage;
+
+                var series = (LineSeries)BatteryModel.Series[0];
+                series.Points.Add(new DataPoint(xValue, batteryValue));
                 ApplySlidingWindow(series);
-                VoltageModel.InvalidatePlot(true);
+                BatteryModel.InvalidatePlot(true);
             }
 
             // 6. Oryantasyon Grafiği (Pitch, Roll, Yaw)

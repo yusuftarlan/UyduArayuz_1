@@ -56,8 +56,8 @@
                 <oxy:PlotView Model="{Binding GraphViewModel.TemperatureModel}" Background="Transparent"/>
             </HeaderedContentControl>
 
-            <HeaderedContentControl Header="Pil Gerilimi (V)" Style="{StaticResource GraphCardStyle}">
-                <oxy:PlotView Model="{Binding GraphViewModel.VoltageModel}" Background="Transparent"/>
+            <HeaderedContentControl Header="{Binding GraphViewModel.BatteryGraphTitle}" Style="{StaticResource GraphCardStyle}">
+                <oxy:PlotView Model="{Binding GraphViewModel.BatteryModel}" Background="Transparent"/>
             </HeaderedContentControl>
 
            
