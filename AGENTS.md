@@ -1,395 +1,165 @@
 # AGENTS.md
 
-Bu dosya, bu repoda çalışan yapay zeka ajanları ve geliştiriciler için güncel proje haritasıdır. Amaç yalnızca dosyaların yerini göstermek değil; telemetri ve video verisinin katmanlar arasında nasıl aktığını, bir değişiklikte hangi parçaların birlikte ele alınması gerektiğini ve bilinen riskleri görünür kılmaktır.
+Bu dosya, `teknofest-uydu-arayuz` projesinin güncel teknik haritasıdır.
 
-## Proje Özeti
+## Proje özeti
 
-`UyduArayuz_1`, .NET 8 WPF ile geliştirilmiş bir yer istasyonu arayüzüdür. Uygulama seri porttan ikili telemetri çerçeveleri alır, çerçeveleri doğrulayıp `TelemetryPacket` modeline dönüştürür ve verileri anlık panel, grafik, alarm LED'leri, 3D durum göstergesi, harita, tablo ve log alanlarında gösterir.
+Proje .NET 8 WPF ile geliştirilmiş bir yer istasyonu arayüzüdür. Seri porttan gelen ikili telemetri çerçevelerini doğrular ve anlık panel, grafikler, alarm LED'leri, sesli alarm, 3B durum göstergesi, harita, geçmiş tablosu ve log alanında gösterir. Canlı görüntü kaynağı olarak yalnızca USB kamera desteklenir.
 
-Canlı kamera altyapısı ortak `ILiveStreamPlayer` yaşam döngüsü altında iki kaynağı destekler. WebRTC yayınları MediaMTX player sayfasını `WebView2WebRtcPlaybackAdapter` ile açar. Varsayılan kaynak olan USB kamera ise `OpenCvUsbCameraPlaybackAdapter` ile Windows DirectShow/Media Foundation üzerinden yakalanır ve kareler WPF `Image` kontrolüne aktarılır. Kaynak türleri URI'ye zorlanmaz; `WebRtcLiveStreamSource` ve `UsbCameraLiveStreamSource` ayrı parametreler taşır.
+Kullanılan temel paketler:
 
-Ana teknoloji ve paketler:
+- `System.IO.Ports`: seri port haberleşmesi
+- `OpenCvSharp4.Windows`: USB kamera yakalama
+- `OxyPlot.Wpf`: telemetri grafikleri
+- `HelixToolkit.Wpf`: 3B durum göstergesi
+- `Mapsui.Wpf`: OpenStreetMap tabanlı harita
 
-- `net8.0-windows` ve WPF
-- `System.IO.Ports` 10.0.6: seri port haberleşmesi
-- `Microsoft.Web.WebView2` 1.0.4078.44: MediaMTX WebRTC player sayfası
-- `OpenCvSharp4.Windows` 4.13.0.20260627: Windows USB kamera yakalama
-- `OxyPlot.Wpf` 2.2.0: canlı grafikler
-- `HelixToolkit.Wpf` 3.1.2: 3D attitude/durum göstergesi
-- `Mapsui.Wpf` 4.1.8: OpenStreetMap tabanlı harita
-- `System.Data.SqlClient` 4.9.1: projede referanslıdır; mevcut ana akışta belirgin bir kullanım görünmemektedir
+## Uygulama akışı
 
-## Üst Düzey Mimari
+`App.xaml`, `MainWindow` penceresini açar. `MainWindow.xaml.cs`, `MainViewModel` örneğini doğrudan oluşturup pencerenin `DataContext` değerine atar. Pencere kapanırken `DataContext`, `IDisposable` ise dispose edilir. Projede harici uygulama ayarı veya `appsettings.json` bulunmaz.
 
-Proje MVVM yaklaşımına yakın ilerler:
+Ana ekran bileşenleri:
 
-- `Models`: telemetri ve video kaynak tanımları.
-- `ViewModels`: UI'nin bağlandığı durum ve davranışlar.
-- `Components`: WPF `UserControl` ekran parçaları ve sınırlı composition/UI glue kodu.
-- `Services`: seri haberleşme, protokol çözümleme, loglama ve video session soyutlamaları.
-- `Adapters`: WPF gibi dış teknoloji ayrıntılarını servis arayüzlerinin arkasına alır.
-- `Shared/Mvvm`: ortak command yardımcıları.
+- `HeaderControl`: port seçimi, bağlantı durumu, görev komutları ve alarm LED'leri
+- `InstantTelemetryPanel`: son doğrulanmış paket
+- `GraphDashboard`: son 60 ölçümü gösteren altı grafik
+- `TelemetryTable`: son 100 doğrulanmış paketin geçmişi
+- `LogPanel`: ekrandaki son 20 WARN ve ERROR kaydı
+- `AttitudeIndicator`: pitch, roll ve yaw değerleriyle dönen STL modeli
+- `Map`: geçerli GPS konumu
+- `LiveCameraView`: USB kamera görüntüsü
 
-Telemetri için zihinsel model:
+Batarya grafiği doğrudan `TelemetryPacket.BatteryVoltage` değerini volt cinsinden gösterir. Sabit batarya yüzdesi seçeneği yoktur.
+
+## Telemetri protokolü
+
+Protokol sabitleri `Services/TelemetryProtocol.cs` dosyasındadır.
+
+- Paket uzunluğu: 80 bayt
+- Başlangıç işareti: `3C 3C 3C 3C`
+- Bitiş işareti: `3E 3E 3E 3E`
+- Görev kodu: offset 62'den başlayan 6 ASCII karakter
+- Takım numarası: offset 68–71
+- CRC alanı: offset 72–75
+- Bitiş alanı: offset 76–79
+- Sayısal alanlar little-endian düzenindedir
+- CRC, başlangıç alanından takım numarasının sonuna kadar olan 72 bayt üzerinde STM32 uyumlu `0x04C11DB7` polinomu ile hesaplanır
+
+Doğrulanan `TelemetryPacket` nesneleri `sealed` sınıftır ve property'leri `init` erişimlidir; parse işleminden sonra değiştirilmemelidir.
+RTC değeri modelde `DateTime`, protokolde 32 bit olan GPS alanları ise `float` olarak tutulur. Metin biçimlendirmesi UI ve CSV sınırında yapılır.
+
+Veri akışı:
 
 ```text
-SerialPort byte akışı
-    -> TelemetryFrameExtractor tam çerçeveleri ayırır
-    -> TelemetryPacketParser başlangıç/bitiş, uzunluk ve CRC32 doğrular
-    -> geçerli çerçeveyi TelemetryPacket'a dönüştürür
-    -> SerialTelemetryService paketi UI ve CSV log kanallarına yazar
-    -> OnTelemetryReceived event'i MainViewModel'e ulaşır
-    -> MainViewModel Dispatcher üzerinde panel, grafik, alarm, 3D ve geçmişi günceller
+SerialPort
+    -> SerialTelemetryService üretici görevi
+    -> TelemetryFrameProcessor
+        -> TelemetryFrameExtractor
+        -> TelemetryPacketParser / TelemetryCrc32
+        -> ITelemetryRecorder (CSV)
+    -> OnTelemetryReceived
+    -> MainViewModel (WPF Dispatcher)
+    -> panel / grafik / alarm / 3B / harita / tablo
 ```
 
-WebRTC video için zihinsel model:
+`TelemetryFrameExtractor`, parçalı okumaları tamponlar ve tam 80 baytlık çerçeveleri ayırır. Başlangıç işareti bulunan fakat beklenen konumda bitiş işareti olmayan adayları sayarak işlemciye bildirir. `TelemetryPacketParser` uzunluk, başlangıç, bitiş, CRC ve RTC alanlarını doğrular. `TelemetryFrameProcessor`, çıkarma, parse etme, doğrulanmış paketi kaydetme ve parse hatalarını raporlama sorumluluklarını seri port yaşam döngüsünden ayırır. Yalnızca doğrulanan paketler CSV kuyruğuna ve UI event'ine gönderilir.
+
+CRC uyuşmazlığında çerçevenin ham hex içeriği kalıcı WARN loguna yazılır; ekranda daha kısa bir uyarı gösterilir. Geçersiz bitiş işaretleri toplu WARN, parser'ın reddettiği diğer çerçeveler WARN olarak raporlanır.
+
+Protokol değişikliğinde `TelemetryProtocol`, `TelemetryFrameExtractor`, `TelemetryPacketParser`, `TelemetryCrc32`, `TelemetryPacket`, `TelemetryFrameProcessor`, CSV kolonları ve karşı cihazın paket üreticisi birlikte gözden geçirilmelidir.
+
+## Seri servis ve bağlantı yaşam döngüsü
+
+`SerialTelemetryService`, seri port yaşam döngüsünü ve arka plan üretici görevini yönetir. UI nesnelerine doğrudan erişmez. Doğrulanmış paket event'ini üretici görevinden yükseltir; `MainViewModel` handler'ı yalnızca Dispatcher kuyruğuna aktarım yaptığı için ayrıca bir UI kanalı ve tüketici görevi yoktur. Loglama ve telemetri kaydı için sırasıyla `IApplicationLogger` ve `ITelemetryRecorder` bağımlılıklarını kullanır.
+
+`Start` çağrısı portu önce çağıran thread üzerinde açar. Port gerçekten açılmadan metot başarılı dönmez ve `HeaderControlViewModel` bağlı duruma geçirilmez. Başarılı açılıştan sonra seri okuma için uzun süreli üretici görevi başlatılır. Yeni bağlantı başlatılırsa önceki oturum önce durdurulur.
+
+`Stop`, iptal sinyalini gönderir, açık portu kapatarak bloklayan okumayı sonlandırır, üretici görevini bekler ve oturum kaynaklarını dispose eder. Normal durdurmada bağlantı durumunu çağıran ViewModel günceller. Üretici iptal isteği olmadan sona erdiğinde UI'a `OnConnectionEnded` bildirilir; `MainViewModel` alarm sesini durdurur ve bağlantı durumunu günceller.
+
+Görev komutları yalnızca bağlı ve açık port `COM6` ise gönderilir. Başka portlardan telemetri dinlenebilir fakat komut gönderilemez:
+
+- Ayrılma: `00 00 00 00`
+- Acil paraşüt: `01 00 00 00`
+- Görev kodu: `AA` ve ardından ASCII olmayan üç ayrı sayısal `0`, `1` veya `2` baytı
+
+UI'daki görev kodu, ayrılma ve paraşüt kontrolleri yalnızca etkin bağlantı portu `COM6` olduğunda açılır. Servis aynı kuralı gönderim anında tekrar doğrular.
+
+## Kayıtlar ve tanılama
+
+Kayıtlar kullanıcıya yazılabilir sabit bir konum olan `%LOCALAPPDATA%/teknofest-uydu-arayuz/telemetry-records` altında tutulur. `LocalApplicationData` işletim sistemi tarafından sağlanamazsa uygulama dizini yedek konum olarak kullanılır.
+
+- `TelemetryCsvRecorder`: doğrulanmış paketleri sınırlı bir kanal üzerinden toplu ve asenkron biçimde CSV dosyasına yazar
+- `ApplicationLogRecorder`: WARN ve ERROR kayıtlarını sınırlı bir kanal üzerinden TXT dosyasına yazar
+- `LoggerService`: thread-safe koleksiyonda ekrandaki son 20 WARN/ERROR kaydını tutar ve kalıcı kaydı `ApplicationLogRecorder` nesnesine iletir
+- `SerialDiagnostics`: ayrıntılı seri port ve çerçeve tanılamasını debug/console çıktısına yazar
+
+Kaydediciler dispose edilirken kanalları tamamlar, kuyruktaki verileri tüketir ve yazıcı görevlerini bekler. Kayıt başlatılamazsa uygulama telemetri göstermeye devam eder ve hata loglanır.
+
+## UI güncelleme kuralları
+
+`MainViewModel.TelemetryService_OnTelemetryReceived`, telemetri event'ini WPF Dispatcher kuyruğuna aktarır. ViewModel dispose edilmişse veya bağlantı artık aktif değilse gecikmiş paket yok sayılır. Aktif bir paket geldiğinde:
+
+1. Alarm LED'lerini ve alarm sesini günceller.
+2. OxyPlot serilerine veri ekler.
+3. 3B göstergeyi günceller.
+4. GPS hata biti kapalıysa harita konumunu günceller.
+5. `CurrentPacket` değerini değiştirerek anlık paneli yeniler.
+6. Paketi `TelemetryHistory` koleksiyonuna ekler ve geçmişi 100 paketle sınırlar.
+
+Arka plan thread'inden UI-bound property veya koleksiyon doğrudan değiştirilmemelidir. Seri servis WPF tiplerine bağımlı olmamalıdır. Telemetri için Dispatcher sınırı `MainViewModel` içindedir; kamera tarafındaki WPF `Image` ve Dispatcher bağımlılıkları View/Adapter katmanında kalır.
+
+## USB kamera
+
+USB kamera akışı:
 
 ```text
-LiveCameraView
-    -> WebRtcLiveStreamSource
-    -> LiveStreamPlayerResolver
-    -> WebRtcLiveStreamPlayerFactory
-    -> WebRtcLiveStreamPlayer
-    -> IWebRtcPlaybackAdapter
-    -> WebView2WebRtcPlaybackAdapter
-    -> MediaMTX player sayfası / WPF WebView2
-```
-
-USB kamera için zihinsel model:
-
-```text
-LiveCameraView (kamera numarası)
-    -> UsbCameraLiveStreamSource
-    -> LiveStreamPlayerResolver
-    -> UsbCameraLiveStreamPlayerFactory
-    -> UsbCameraLiveStreamPlayer
-    -> IUsbCameraPlaybackAdapter
+LiveCameraView (kamera sıra numarası)
     -> OpenCvUsbCameraPlaybackAdapter
-    -> DirectShow veya Media Foundation
-    -> dondurulmuş BitmapSource / WPF Image
+    -> DirectShow, başarısızsa Media Foundation
+    -> dondurulmuş BitmapSource
+    -> WPF Image
 ```
 
-## Uygulama Giriş Noktası ve Yerleşim
+`LiveCameraView`, start, stop ve unload işlemlerini tek bir `SemaphoreSlim` ile sıralar ve UI düğmelerinin `Idle`, `Starting`, `Playing`, `Stopping`, `Faulted` durumlarını yönetir. Başlangıç iptal edilebilir; View unload olduğunda OpenCV adapter dispose edilir. Tek kamera implementasyonu bulunduğu için arada player ve playback interface katmanı yoktur.
 
-- `UyduArayuz_1/App.xaml`: uygulamayı `MainWindow.xaml` ile başlatır.
-- `UyduArayuz_1/MainWindow.xaml.cs`: `MainViewModel` oluşturur ve pencerenin `DataContext` değerine atar.
-- `UyduArayuz_1/MainWindow.xaml`: ana ekran yerleşimini kurar.
+`OpenCvUsbCameraPlaybackAdapter`, kareleri arka plan görevinde okur. Oluşturulan `BitmapSource` dondurulur ve render kuyruğunda yalnızca en yeni kare tutulur; böylece yavaş UI durumunda eski kareler birikmez.
 
-Ana pencere:
+UI kamera aygıtlarını adlarıyla keşfetmez; kullanıcı OpenCV kamera sıra numarasını (`0`, `1`, ...) verir. Varsayılan sıra numarası `0`'dır ve negatif değerler reddedilir. Kamera testi için Windows kamera izni, uygun sürücü ve fiziksel aygıt gerekir.
 
-- Üst satırda `HeaderControl`.
-- Ana içerikte `CenterDisplayArea`.
-- Sağ sütunda `LiveCameraView`, `AttitudeIndicator` ve `Map`.
-- `Map` bileşeni `DataContext="{Binding MapViewControl}"` ile `MapViewModel` alır.
-- `LiveCameraView`, WPF görüntü kontrolleri nedeniyle video composition root'unu kendi code-behind dosyasında kurar. Varsayılan protokol `UsbCamera`dır; WebRTC factory kaydı geriye dönük olarak korunur.
-
-## Telemetri Modeli ve İkili Protokol
-
-### `TelemetryPacket`
-
-Dosya: `UyduArayuz_1/Models/TelemetryPacket.cs`
-
-Tek bir doğrulanmış telemetri paketini temsil eder. Başlıca alanlar:
-
-- paket numarası, uydu statüsü ve hata kodu
-- gönderme zamanı
-- basınç, yükseklik, iniş hızı, sıcaklık ve pil gerilimi
-- GPS enlem, boylam ve irtifa
-- pitch, roll ve yaw
-- görev kodu ve takım numarası
-
-### Protokol sınıfları
-
-- `TelemetryProtocol`: başlangıç/bitiş baytları, çerçeve uzunluğu, alan offset'leri, CRC aralığı ve durum metinleri.
-- `TelemetryFrameExtractor`: parçalı seri port okumalarını tamponlar, başlangıç baytına senkronize olur ve tam çerçeveleri ayırır.
-- `TelemetryPacketParser`: çerçeve yapısını ve CRC32 değerini doğrular; little-endian sayıları ve float alanlarını okur.
-- `TelemetryCrc32`: `0xEDB88320` polinomu ile CRC32 hesaplar.
-
-Yeni bir telemetri alanı veya protokol değişikliği yalnızca modele eklenmemelidir. En az şu noktalar birlikte kontrol edilmelidir:
-
-1. `TelemetryProtocol` uzunluk ve offset sabitleri
-2. `TelemetryFrameExtractor`
-3. `TelemetryPacketParser`
-4. `TelemetryPacket`
-5. `ArduinoTelemetrySimulator/ArduinoTelemetrySimulator.ino`
-6. İlgili ViewModel, tablo, grafik veya XAML binding'i
-
-Protokol değişikliğinde masaüstü okuyucusu ve Arduino üreticisinin aynı paket uzunluğunu, offset'leri, endian düzenini, CRC aralığını ve baud rate'i kullandığını doğrulamadan değişikliği tamamlanmış sayma.
-
-## Telemetri Servis Katmanı
-
-### `SerialTelemetryService`
-
-Dosya: `UyduArayuz_1/Services/SerialTelemetryService.cs`
-
-Sorumlulukları:
-
-- seçilen port ve baud rate ile yeni bir `SerialPort` oluşturmak
-- seri porttan ham bayt blokları okumak
-- `TelemetryFrameExtractor` ile tam ikili çerçeveleri çıkarmak
-- `TelemetryPacketParser` ile çerçeveleri doğrulamak ve parse etmek
-- geçerli paketleri iki `Channel<TelemetryPacket>` kanalına ayırmak:
-  - UI event kanalı
-  - `telemetri_log.csv` dosyasına yazan log kanalı
-- geçerli paketler için `OnTelemetryReceived` event'ini yayınlamak
-- geçersiz çerçeve, CRC ve seri port hatalarını uygulama loguna yazmak
-
-Thread kuralları:
-
-- Servis WPF `Dispatcher` bilmez ve UI koleksiyonlarına dokunmaz.
-- `OnTelemetryReceived` arka plan tüketicisinden gelebilir.
-- UI thread'e geçiş `MainViewModel.TelemetryService_OnTelemetryReceived` içinde yapılır.
-- `LoggerService` koleksiyonu `BindingOperations.EnableCollectionSynchronization` ile eşzamanlı erişime açılmıştır.
-
-### COM6 görev komutları
-
-- Acil paraşüt ve ayrılma komutları `HeaderControlViewModel` callback'leri üzerinden `MainViewModel`'e, oradan `SerialTelemetryService.SendCommand` metoduna ulaşır.
-- Komutlar yalnızca açık port `COM6` ise gönderilir.
-- Ayrılma değeri `0`, acil paraşüt değeri `1` olarak tanımlıdır.
-- Her komut 4 baytlık little-endian bir değer olarak yazılır: ayrılma `00 00 00 00`, acil paraşüt `01 00 00 00`.
-- Bu protokol değiştirilirken `MainViewModel` komut sabitleri, `SerialTelemetryService` payload üretimi ve karşı tarafın 4 baytlık okuma düzeni birlikte kontrol edilmelidir.
-
-Görev kodu gönderimi aynı COM6 yazma sınırını kullanır ancak dört bağımsız bayttan oluşur:
-
-```text
-0b10101010, birinci rakam, ikinci rakam, üçüncü rakam
-```
-
-- İlk bayt koda gömülü `10101010` bit desenidir (`0xAA`, ondalık 170).
-- Kullanıcı girişi tam 3 karakter olmalı ve her karakter yalnızca `0`, `1` veya `2` olmalıdır.
-- Üç rakam sayının yüzler/onlar/birler karşılığına çevrilmez; her biri ayrı bir bayta yazılır. Örneğin `120` girişi `AA 01 02 00` paketini üretir.
-- `HeaderControl.xaml` giriş ve düğme binding'lerini, `HeaderControlViewModel` giriş state'i ile callback'i, `MainViewModel` doğrulama/paketlemeyi, `SerialTelemetryService` ise tam 4 baytlık tek yazma işlemini yönetir.
-
-### `LoggerService`
-
-Dosya: `UyduArayuz_1/Services/LoggerService.cs`
-
-- Logları `ObservableCollection<LogModel>` içinde tutar.
-- `LoggerService.Instance` kurucuda atanır.
-- `LogPanel` bu singleton instance üzerinden logları gösterir.
-- Seri servis başlamadan önce `LoggerService` oluşturulmuş olmalıdır; mevcut `MainViewModel` sırası bunu sağlar.
-
-## ViewModel Katmanı
-
-### `MainViewModel`
-
-Dosya: `UyduArayuz_1/ViewModels/MainViewModel.cs`
-
-Merkezi telemetri koordinasyon noktasıdır:
-
-- `SerialTelemetryService` ve `LoggerService` oluşturur.
-- `HeaderControlViewModel`, `AlarmPanelViewModel`, `GraphDashboardViewModel`, `AttitudeViewModel` ve `MapViewModel` oluşturur.
-- `CurrentPacket` ile anlık paketi tutar.
-- `TelemetryHistory` içinde son 100 paketi saklar.
-- Telemetri event'ini `Application.Current.Dispatcher.InvokeAsync` ile UI thread'e taşır.
-- Alarm, grafik, 3D attitude, anlık panel ve geçmiş tablosunu günceller.
-
-Önemli: `MapViewModel.UpdatePosition` mevcut olmasına rağmen `MainViewModel` telemetri event'inde henüz çağrılmıyor. Bu nedenle harita katmanı hazırlanmış olsa da canlı GPS akışı uçtan uca tamamlanmış değildir.
-
-### `HeaderControlViewModel`
-
-- Port listesini ve baud rate seçeneklerini yönetir.
-- Bağlan/kes command'larını yayınlar.
-- Seri servisi doğrudan başlatmaz; `ConnectRequested` ve `DisconnectRequested` callback'leri üzerinden `MainViewModel` ile konuşur.
-
-### `GraphDashboardViewModel`
-
-- OxyPlot modellerini kurar ve telemetri geldikçe serileri günceller.
-- Grafiklerde yaklaşık son 60 noktayı tutan kayan pencere kullanır.
-- Yeni grafik eklerken `PlotModel` property, `InitializeGraphs`, `UpdateGraphs` ve `GraphDashboard.xaml` birlikte güncellenmelidir.
-- GPS rota serisine veri ekleyen bölüm mevcut kodda yorum satırındadır.
-
-### `AlarmPanelViewModel`
-
-`ErrorCode` değerini bit maskesi olarak yorumlar:
-
-- bit 0: iniş hızı
-- bit 1: GPS
-- bit 2: ayrılma
-- bit 3: acil paraşüt
-
-### `AttitudeViewModel`
-
-- `INotifyPropertyChanged` uygular.
-- Pitch, roll ve yaw değişimlerini binding sistemine bildirir.
-- `UpdateAttitude` telemetri değerlerini, `ResetOrientation` sıfır durumunu uygular.
-
-### `MapViewModel`
-
-- Mapsui `Map` nesnesini EPSG:3857 olarak oluşturur.
-- OpenStreetMap tile katmanı ve `MemoryLayer` tabanlı "Uydu Konumu" katmanı ekler.
-- `UpdatePosition(latitude, longitude)` koordinat aralıklarını doğrular.
-- GPS WGS84 koordinatını `SphericalMercator.FromLonLat(longitude, latitude)` ile Web Mercator'a çevirir.
-- İşaretçiyi günceller, `DataHasChanged()` çağırır, ilk konuma yakınlaşır ve sonraki konumları takip eder.
-- `Map.xaml.cs`, `DataContextChanged` ve `Loaded` sırasında `MyMapControl.Map` değerini ViewModel'den atar.
-
-### `LiveCameraView` composition root
-
-Dosya: `UyduArayuz_1/Components/LiveCameraView.xaml.cs`
-
-- Ayrı bir `LiveCameraViewModel` yoktur; WPF kontrol sahipliği ve composition kodu View code-behind içinde tutulur.
-- `LiveStreamPlayerResolver`, WebRTC ve USB factory'leriyle burada kurulur.
-- Varsayılan `ConfiguredProtocol`, `UsbCamera` değeridir.
-- Start, stop ve unload işlemleri `SemaphoreSlim` ile sıralanır; devam eden başlangıç iptal edilir ve player dispose edilir.
-- UI yalnızca state event'lerine göre düğmeleri etkinleştirir; kamera okuma işi adapter'ın arka plan görevindedir.
-
-## Video Modeli, Session ve Adapter Katmanları
-
-### Video kaynak modelleri
-
-Konum: `UyduArayuz_1/Services/Video/LiveStreamContracts.cs`
-
-- `LiveStreamProtocol`: `WebRtc` ve `UsbCamera`.
-- `LiveStreamSource`: protokole özel kaynakların soyut temel record'u.
-- `WebRtcLiveStreamSource`: MediaMTX player sayfasının mutlak URI'sini taşır.
-- `UsbCameraLiveStreamSource`: Windows/OpenCV kamera sıra numarasını taşır.
-- `LiveStreamState`: `Idle`, `Starting`, `Playing`, `Stopping`, `Faulted`.
-
-### Video servisleri
-
-Konum: `UyduArayuz_1/Services/Video`
-
-- `ILiveStreamPlayer`: protokol, state, hata event'leri ve async start/stop/dispose sözleşmesi.
-- `ILiveStreamPlayerFactory`: tek bir protokol için player oluşturur.
-- `LiveStreamPlayerResolver`: protokole göre tam bir factory seçer; sıfır veya birden fazla eşleşmeyi hata sayar.
-- `WebRtcLiveStreamPlayer`: WebRTC adapter yaşam döngüsünü yönetir.
-- `UsbCameraLiveStreamPlayer`: USB adapter yaşam döngüsünü yönetir.
-
-### Video adapter'ları
-
-- `WebView2WebRtcPlaybackAdapter`, MediaMTX WebRTC player sayfasını WebView2'de açar. Sayfanın video event'lerini JavaScript mesajlarıyla izler; gezinmeyi aynı HTTPS origin ile sınırlar ve kamera/mikrofon izinlerini reddeder.
-- `OpenCvUsbCameraPlaybackAdapter`, önce DirectShow sonra Media Foundation arka ucuyla kamera sıra numarasını açar. Kareleri UI dışında okur, dondurulmuş `BitmapSource` üretir ve render kuyruğunda yalnızca en yeni kareyi WPF `Image` kontrolüne verir.
-- Her iki adapter da start, stop, hata ve dispose davranışını kendi protokol player'ına event/sözleşme üzerinden aktarır.
-
-### `LiveCameraView`
-
-- Kamera sıra numarası, başlatma ve durdurma kontrollerini içerir.
-- USB için WPF `Image`, korunan WebRTC hattı için `WebView2` yüzeyi bulunur; seçilen protokole göre yalnızca biri görünür.
-- `Unloaded` sırasında başlangıç iptal edilir ve player üzerinden adapter kaynakları kapatılır.
-
-### USB kamera sınırı
-
-USB kamera yakalama hattı uygulanmıştır. UI şu anda aygıtları adlarıyla listelemek yerine OpenCV kamera sıra numarası (`0`, `1`, ...) alır. Kamera adlarıyla seçim gerekirse bu iş ayrı bir Windows cihaz keşif servisine eklenmeli; yakalama adapter'ı ve player yaşam döngüsü değiştirilmemelidir.
-
-## Component Katmanı
-
-WPF `UserControl` dosyaları `UyduArayuz_1/Components` altındadır:
-
-- `HeaderControl`: port, bağlantı, görev komutu ve alarm alanı.
-- `CenterDisplayArea`: ana merkez yerleşimi.
-- `InstantTelemetryPanel`: `CurrentPacket` değerleri.
-- `GraphDashboard`: OxyPlot grafikleri.
-- `TelemetryTable`: `TelemetryHistory` tablosu.
-- `LogPanel`: `LoggerService.Instance.Logs` görünümü.
-- `LiveCameraView`: USB kamera görüntüsü için `Image`, korunan WebRTC hattı için `WebView2` ve kamera kontrolleri.
-- `AttitudeIndicator`: HelixToolkit 3D attitude görünümü.
-- `Map`: Mapsui WPF harita kontrolü.
-
-Yeni UI eklerken:
-
-- Salt görünüm ise XAML/Component katmanında tut.
-- Kullanıcı aksiyonu veya UI state'i varsa ViewModel/command seçeneğini değerlendir.
-- Dosya seçici veya WPF kontrol oluşturma gibi framework işi gerekiyorsa ince bir View composition katmanı kullan.
-- Seri port, protokol, dosya, ağ veya cihaz yakalama işi ise Service/Adapter katmanına koy.
-
-## Binding, Thread ve Yaşam Döngüsü Kuralları
-
-- Arka plan thread'inden doğrudan UI-bound koleksiyon veya property güncellemesi yapma.
-- Telemetri UI güncellemelerini `MainViewModel` içindeki Dispatcher sınırında tut.
-- Servis katmanına WPF kontrolü veya `Dispatcher` bağımlılığı ekleme.
-- WPF `Image`/`WebView2` bağımlılığını adapter ve View composition noktasında tut; player sözleşmeleri WPF kontrolü bilmemelidir.
-- UI-bound property değişiyorsa `INotifyPropertyChanged` gereksinimini kontrol et.
-- Event aboneliklerini sahiplik sırasına göre kaldır; View kapanırken önce session/ViewModel, sonra adapter dispose edilmelidir.
-- Async start/stop/dispose işlemlerinde iptal, tekrar çağrı ve eşzamanlı çağrı davranışlarını koru.
-
-Yaygın binding yolları:
-
-- `CurrentPacket.PacketNo`
-- `TelemetryHistory`
-- `GraphViewModel.PacketModel`
-- `HeaderControlViewModel.ConnectCommand`
-- `AlarmPanelViewModel.GpsErrorLed`
-- `MapViewControl`
-- Video View içinde player `StateChanged` ve `ErrorOccurred` event'leri
-
-## Arduino Telemetri Simülatörü
-
-Konum: `ArduinoTelemetrySimulator/ArduinoTelemetrySimulator.ino`
-
-- USB seri port üzerinden ikili telemetri çerçevesi üretir.
-- Varsayılan baud rate `9600` ve gönderim aralığı yaklaşık 1 saniyedir.
-- Basınç, yükseklik, GPS ve attitude alanlarını zamanla değiştirerek UI testine yardımcı olur.
-- Seri hatta `Serial.print/println` gibi ek metin yazılmamalıdır; masaüstü uygulaması yalnızca ikili çerçeve bekler.
-- Masaüstü `TelemetryProtocol` ile paket uzunluğu, adres/channel alanları, offset'ler, CRC aralığı ve endian düzeni birebir aynı olmalıdır.
-
-## Derleme ve Çalıştırma
+## Derleme ve çalıştırma
 
 Kök dizinde:
 
 ```powershell
-dotnet build .\UyduArayuz_1.slnx
+dotnet build .\teknofest-uydu-arayuz.slnx
 ```
 
 Uygulamayı çalıştırmak için:
 
 ```powershell
-dotnet run --project .\UyduArayuz_1\UyduArayuz_1.csproj
+dotnet run --project .\teknofest-uydu-arayuz\teknofest-uydu-arayuz.csproj
 ```
 
-Son normal build doğrulama tabanı 0 hata ve 41 kaynak uyarısıdır. Uyarılar çoğunlukla nullability ve tekrarlı `using` kaynaklıdır. `--no-incremental` WPF derlemesinde aynı uyarılar geçici `*_wpftmp.csproj` ve ana proje için tekrarlanarak toplam 82 kez raporlanabilir. Uyarı sayısı kod değiştikçe değişebileceği için sabit bir başarı ölçütü olarak kullanılmamalıdır.
+Nihai Windows x64 klasör paketini üretmek için:
 
-Gerçek seri testte doğru COM port ve baud rate seçilmelidir. Donanım olmadan UI ve yerel video test edilebilir; canlı telemetri alınamaz. Network video testi için doğrudan medya URI'si ve ağ erişimi gerekir.
+```powershell
+dotnet publish .\teknofest-uydu-arayuz\teknofest-uydu-arayuz.csproj -p:PublishProfile=WinX64
+```
 
-## Bilinen Kritik Riskler ve Bakım Noktaları
+Publish çıktısı `artifacts/publish/teknofest-uydu-arayuz-win-x64` altında oluşur. Profil .NET çalışma zamanını pakete dahil eder; hedef makinede ayrıca .NET kurulumu gerekmez. WPF ve OpenCV'nin reflection/yerel bağımlılık gereksinimleri nedeniyle trimming ve single-file publish kapalıdır. Paket `body-model/counsat.stl`, `sound/warning.mp3`, OpenCV yerel DLL'leri ve `teknofest-uydu-arayuz.exe` dosyasını birlikte içermelidir. Ürün ve assembly sürümü `teknofest-uydu-arayuz.csproj` içinde tutulur; her dağıtım öncesinde sürüm yükseltilmelidir.
 
-Bu bölüm mevcut davranışı belgeleyen bir yön tabelasıdır; maddelerin belgede bulunması sorunun çözüldüğü anlamına gelmez.
+Debug yapılandırması konsol çıktısını göstermek için `Exe`, diğer yapılandırmalar WPF uygulaması olarak `WinExe` üretir. Donanım olmadan derleme ve UI başlangıcı doğrulanabilir; gerçek seri telemetri ve USB kamera yakalama hattı uçtan uca doğrulanamaz.
 
-### Kritik: masaüstü ve Arduino protokolü uyuşmuyor
+Çözümde otomatik test projesi bulunmaz. Protokol, frame extractor, CRC, seri yaşam döngüsü ve kamera state geçişleri değiştirildiğinde mümkün olan davranışlar ayrıca hedefli test edilmelidir.
 
-- Arduino simülatörü `PACKET_LENGTH = 71`, `OFFSET_END = 70` kullanır ve adres/channel alanlarını içerir.
-- Masaüstü `TelemetryProtocol` şu anda `PacketLength = 64` ve `EndOffset = 64` tanımlar. 64 elemanlı dizide 64. indeks geçersizdir.
-- Masaüstünde `TeamNoOffset = 59` yorumu 1 bayt derken `TelemetryPacketParser` takım numarasını 4 bayt okur.
-- Masaüstü takım numarası okuması 59–62 baytlarını kullanır; `CrcOffset = 60` ile alanlar çakışır.
-- Bu uyumsuzluk build sırasında yakalanmaz; seri çalışma anında çerçeve çıkarma/parsing hatasına yol açabilir.
-- Çözümde tek bir protokol şeması seçilip hem masaüstü hem Arduino sabitleri ve parser testleri birlikte güncellenmelidir.
+## Değişiklik kontrol listesi
 
-### Telemetri yaşam döngüsü
-
-- `SerialTelemetryService.Start` producer ve consumer görevlerini başlatıp hemen döner; donanım portu daha sonra producer içinde açılır. Bu nedenle üst katman `Start` dönüşünü donanım bağlantısının kesin başarı işareti saymamalıdır.
-- `Stop`, cancellation uygular ve kaynakları dispose eder; ancak producer/consumer görevlerini saklayıp tamamlanmalarını beklemez. Kapanış ve hızlı yeniden bağlantıda yarış durumları test edilmelidir.
-- `LoggerService.Instance` başlatma sırasına duyarlıdır.
-
-### Harita
-
-- `MapViewModel.UpdatePosition` hazırdır fakat `MainViewModel` tarafından çağrılmaz.
-- Canlı GPS entegrasyonunda GPS hata biti ve koordinat geçerliliği kontrol edildikten sonra UI Dispatcher içinde `MapViewControl.UpdatePosition` çağrılmalıdır.
-- Sürekli `PointFeature` üretiminin uzun süreli telemetride allocation etkisi değerlendirilmelidir.
-
-### Video
-
-- WebRTC oynatma MediaMTX player sayfası ve kurulu WebView2 Runtime'a bağlıdır.
-- USB oynatma OpenCvSharp Windows native runtime, kamera sürücüsü ve Windows kamera gizlilik iznine bağlıdır.
-- UI aygıt adlarını listelemez; doğru kamera sıra numarası kullanıcı tarafından seçilmelidir.
-- `async void` WPF event handler'larında tüm hata yollarının kullanıcıya gösterildiğini veya loglandığını kontrol et.
-- Adapter/session event aboneliklerini değiştirirken dispose sırasını ve bekleyen `MediaOpened` iptalini koru.
-
-### Genel bakım
-
-- Otomatik test projesi bulunmamaktadır. Parser, frame extractor, CRC, resolver ve video state geçişleri test için öncelikli adaylardır.
-- `LoggerService.cs` ve `LogPanel.xaml.cs` içinde tekrarlı `using` uyarıları vardır.
-- Bazı ViewModel ve command üyelerinde nullability uyarıları bulunur.
-- `RelayCommand` dosyası `Shared/Mvvm` altında olsa da namespace'i hâlâ `UyduArayuz_1.Helpers` değeridir; taşıma/refactor sırasında namespace kullanımını kontrol et.
-- Çalışma ağacında kullanıcıya ait başka değişiklikler olabilir; ilgisiz dosyaları geri alma veya ezme.
-
-## Yeni Katkı İçin Kontrol Listesi
-
-1. Değişiklik hangi katmana ait: Model, ViewModel, Component, Service, Adapter veya Shared?
-2. Veri akışı ve sahiplik hangi nesneden hangi nesneye geçiyor?
-3. Binding path ve `DataContext` kaynağı doğru mu?
-4. UI-bound değişiklik doğru thread'de mi ve `INotifyPropertyChanged` gerekiyor mu?
-5. Event/async kaynaklar start, stop, iptal ve dispose yollarında temizleniyor mu?
-6. Telemetri protokolü değiştiyse masaüstü ve Arduino şeması birlikte güncellendi mi?
-7. Video kaynağı URI tabanlı mı, USB capture cihazı mı; doğru factory/adapter seçildi mi?
-8. Harita GPS verisi WGS84'ten Web Mercator'a doğru sırayla dönüştürülüyor mu?
-9. Değişiklik küçük ve doğrulanabilir mi; ilgisiz kullanıcı değişiklikleri korundu mu?
-10. `dotnet build .\UyduArayuz_1.slnx` başarıyla tamamlanıyor mu?
+1. Değişiklik doğru katmanda mı; seri taşıma ile çerçeve işleme sorumlulukları ayrık mı?
+2. XAML binding yolu mevcut property ile eşleşiyor mu?
+3. UI güncellemesi Dispatcher sınırında mı ve bağlantı/dispose durumu kontrol ediliyor mu?
+4. Event abonelikleri, kanallar, görevler ve async kaynaklar dispose sırasında temizleniyor mu?
+5. Protokol değiştiyse tüm offset, uzunluk, endian, CRC, model ve CSV kolonları birlikte güncellendi mi?
+6. Komut formatı tam 4 bayt mı ve yalnızca açık `COM6` üzerinden mi gönderiliyor?
+7. İlgisiz kullanıcı değişiklikleri korunuyor mu?
+8. `dotnet build .\teknofest-uydu-arayuz.slnx` başarıyla tamamlanıyor mu?
+9. `WinX64` profiliyle publish başarılı mı ve zorunlu model, ses, OpenCV native DLL ve EXE dosyaları çıktıda mevcut mu?

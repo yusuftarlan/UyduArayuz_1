@@ -1,4 +1,4 @@
-# UyduArayuz_1 - .NET 8 / WPF
+# teknofest-uydu-arayuz - .NET 8 / WPF
 
 # Derleme çıktıları
 [Bb]in/
@@ -58,16 +58,17 @@ coverage.*
 *.deps.json
 *.runtimeconfig.dev.json
 
-# WebView2 kullanıcı profili ve önbelleği
-*.exe.WebView2/
-
 # Uygulamanın çalışma zamanında ürettiği telemetri ve log kayıtları
-/UyduArayuz_1/telemetry-records/**
-!/UyduArayuz_1/telemetry-records/.gitkeep
+/teknofest-uydu-arayuz/telemetry-records/**
+!/teknofest-uydu-arayuz/telemetry-records/.gitkeep
 *.log
 
 # Yerel teşhis/probe çalışma alanları
 /.camera-probe/
+
+# Yerel proje yedekleri
+/UyduArayuz_1.zip
+/teknofest-uydu-arayuz.zip
 
 # Profiling ve hata dökümleri
 *.psess

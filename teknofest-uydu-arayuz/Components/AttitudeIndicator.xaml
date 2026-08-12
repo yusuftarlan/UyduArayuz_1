@@ -1,0 +1,74 @@
+<UserControl x:Class="TeknofestUyduArayuz.Components.AttitudeIndicator"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:helix="http://helix-toolkit.org/wpf"
+             mc:Ignorable="d" 
+             d:DesignHeight="450" d:DesignWidth="400">
+    <Grid>
+        <helix:HelixViewport3D 
+            x:Name="viewPort" ZoomExtentsWhenLoaded="False" ShowCoordinateSystem="True"
+            Focusable="False"       
+            IsRotationEnabled="False"
+            IsPanEnabled="False"
+            IsZoomEnabled="True"
+            IsMoveEnabled="False"
+            Background="Transparent">
+            <helix:DefaultLights/>
+
+            <helix:FileModelVisual3D x:Name="SatelliteModel"
+                                     DefaultMaterial="{x:Static helix:Materials.Gray}">
+                <helix:FileModelVisual3D.Transform>
+                    <Transform3DGroup>
+                        <!-- Dönüş eksenleri model merkezinden geçsin diye STL'yi önce orijine taşı. -->
+                        <TranslateTransform3D x:Name="ModelCenterOffset"/>
+                        <ScaleTransform3D x:Name="ModelScale"/>
+
+                        <!-- Kaynak STL'nin baş aşağı yerel koordinat sistemini WPF eksenlerine uyarlar. -->
+                        <RotateTransform3D>
+                            <RotateTransform3D.Rotation>
+                                <AxisAngleRotation3D Axis="1,0,0" Angle="180"/>
+                            </RotateTransform3D.Rotation>
+                        </RotateTransform3D>
+
+                        <RotateTransform3D>
+                            <RotateTransform3D.Rotation>
+                                <AxisAngleRotation3D Axis="1,0,0" Angle="{Binding AttitudeViewModel.Pitch}"/>
+                            </RotateTransform3D.Rotation>
+                        </RotateTransform3D>
+
+                        <RotateTransform3D>
+                            <RotateTransform3D.Rotation>
+                                <AxisAngleRotation3D Axis="0,1,0" Angle="{Binding AttitudeViewModel.Yaw}"/>
+                            </RotateTransform3D.Rotation>
+                        </RotateTransform3D>
+
+                        <RotateTransform3D>
+                            <RotateTransform3D.Rotation>
+                                <AxisAngleRotation3D Axis="0,0,1" Angle="{Binding AttitudeViewModel.Roll}"/>
+                            </RotateTransform3D.Rotation>
+                        </RotateTransform3D>
+                    </Transform3DGroup>
+                </helix:FileModelVisual3D.Transform>
+            </helix:FileModelVisual3D>
+
+        </helix:HelixViewport3D>
+
+        <TextBlock Text="3D DURUM SİMÜLASYONU" 
+                   VerticalAlignment="Top" 
+                   HorizontalAlignment="Center" 
+                   Margin="10" 
+                   Foreground="#38BDF8"
+                   FontWeight="Bold"/>
+
+        <TextBlock x:Name="ModelLoadError"
+                   VerticalAlignment="Bottom"
+                   HorizontalAlignment="Center"
+                   Margin="10"
+                   Foreground="#F87171"
+                   TextAlignment="Center"
+                   TextWrapping="Wrap"
+                   Visibility="Collapsed"/>
+    </Grid>
+</UserControl>

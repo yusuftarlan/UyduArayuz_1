@@ -1,0 +1,28 @@
+<Window x:Class="TeknofestUyduArayuz.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:comp="clr-namespace:TeknofestUyduArayuz.Components"
+        mc:Ignorable="d"
+        Title="Yer İstasyonu" Height="600" Width="1200" MinWidth="1180">
+    <Grid Background="#1E293B">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="75"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="80*"/>
+            <ColumnDefinition Width="20*"/>
+        </Grid.ColumnDefinitions>
+
+        <comp:HeaderControl Grid.Row="0" Grid.ColumnSpan="2" Margin="5" Background="#334155"/>
+        <comp:CenterDisplayArea Grid.Row="1" Margin="5"/>
+
+        <StackPanel Grid.Row="1" Grid.Column="1" Margin="5">
+            <comp:LiveCameraView Height="250"/>
+            <comp:AttitudeIndicator Height="250"/>
+            <comp:Map Height="200" DataContext="{Binding MapViewControl}"/>
+        </StackPanel>
+    </Grid>
+</Window>
