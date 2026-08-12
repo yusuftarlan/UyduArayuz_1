@@ -1,13 +1,12 @@
-﻿## Boş bırakılmış dizinleri (klasörleri) git üzerinde tutmak isterseniz
-# .gitkeep dosyalarını ignore etmeyin
+# UyduArayuz_1 - .NET 8 / WPF
 
-## Binaries
+# Derleme çıktıları
 [Bb]in/
 [Oo]bj/
-
-## Build
 [Dd]ebug/
 [Rr]elease/
+[Pp]ublish/
+artifacts/
 x64/
 x86/
 [Aa][Rr][Mm]/
@@ -15,22 +14,26 @@ x86/
 bld/
 [Bb]inaries/
 [Mm]etrics/
-[Tt]est[Rr]esult*/
 [Bb]uild[Ll]og.*
 
-## Visual Studio
+# Visual Studio ve kullanıcıya özel proje ayarları
 .vs/
 *.user
+*.rsuser
+*.suo
 *.userosscache
 *.sln.docstates
-*.suo
 *.userprefs
 
-## Rider
+# Rider / JetBrains
 .idea/
 *.sln.iml
+*.DotSettings.user
 
-## NuGet
+# VS Code - kişisel ayarlar; ortak ayarlar gerektiğinde ayrıca eklenebilir
+.vscode/
+
+# NuGet geri yükleme çıktıları ve yerel paketler
 packages/
 *.nupkg
 *.snupkg
@@ -38,20 +41,59 @@ packages/
 project.lock.json
 project.assets.json
 
-## Profiling
+# Test ve kod kapsamı çıktıları
+[Tt]est[Rr]esult*/
+[Tt]est[Rr]esults/
+coverage/
+coverage.*
+*.coverage
+*.coveragexml
+
+# WPF / .NET geçici dosyaları
+*.wpftmp.csproj
+*.tmp
+*.temp
+*.cache
+*.pdb
+*.deps.json
+*.runtimeconfig.dev.json
+
+# WebView2 kullanıcı profili ve önbelleği
+*.exe.WebView2/
+
+# Uygulamanın çalışma zamanında ürettiği telemetri ve log kayıtları
+/UyduArayuz_1/telemetry-records/**
+!/UyduArayuz_1/telemetry-records/.gitkeep
+*.log
+
+# Yerel teşhis/probe çalışma alanları
+/.camera-probe/
+
+# Profiling ve hata dökümleri
 *.psess
 *.vsp
 *.vspx
 *.sap
+*.dmp
+*.mdmp
 
-## Olası log dosyaları
-*.log
-UyduArayuz_1/telemetry-records/*.csv
-
-## Diğer geçici veya otomatik oluşturulan dosyalar
-*.cache
+# Yerel veritabanı ve yedek dosyaları
 *.sqlite
+*.sqlite-shm
+*.sqlite-wal
 *.mdf
 *.ldf
 *.sdf
 *.bak
+
+# Yerel ortam ve gizli ayarlar
+.env
+.env.*
+!.env.example
+appsettings.*.local.json
+
+# İşletim sistemi dosyaları
+.DS_Store
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
